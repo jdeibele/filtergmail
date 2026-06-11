@@ -1,0 +1,497 @@
+<!-- index.html — filtergmail.com main page | v1.0.0 | 2026-06-11 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>filtergmail.com — Control your inbox</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f1f3f4;
+  color: #202124;
+  min-height: 100vh;
+}
+
+header {
+  background: #fff;
+  border-bottom: 1px solid #dadce0;
+  padding: 0 32px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.logo svg { width: 32px; height: 32px; flex-shrink: 0; }
+
+.logo-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a73e8;
+  letter-spacing: -0.3px;
+}
+
+.header-tagline {
+  font-size: 0.9rem;
+  color: #5f6368;
+  border-left: 1px solid #dadce0;
+  padding-left: 12px;
+  margin-left: 4px;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #dadce0;
+  padding: 28px;
+}
+
+.card h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #202124;
+  margin-bottom: 6px;
+}
+
+.card .subtitle {
+  font-size: 0.875rem;
+  color: #5f6368;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* Filter table */
+.filter-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.filter-table th {
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 8px 10px;
+}
+
+.filter-table th:last-child { width: 36px; }
+
+.filter-row td {
+  padding: 5px 8px 5px 0;
+  vertical-align: middle;
+}
+
+.filter-row td:first-child { padding-left: 0; }
+
+.filter-row input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #202124;
+  background: #fff;
+  transition: border-color 0.15s;
+  outline: none;
+}
+
+.filter-row input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
+}
+
+.filter-row input::placeholder { color: #bdc1c6; }
+
+.remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #bdc1c6;
+  padding: 6px;
+  border-radius: 4px;
+  line-height: 1;
+  font-size: 1.1rem;
+  transition: color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-btn:hover { color: #d93025; }
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.add-btn {
+  background: none;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 0.875rem;
+  color: #1a73e8;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-weight: 500;
+}
+
+.add-btn:hover:not(:disabled) { background: #f0f4ff; border-color: #1a73e8; }
+.add-btn:disabled { color: #bdc1c6; border-color: #f1f3f4; cursor: not-allowed; }
+
+.row-counter {
+  font-size: 0.8rem;
+  color: #5f6368;
+}
+
+.row-counter .count { font-weight: 600; color: #202124; }
+
+.download-btn {
+  width: 100%;
+  background: #1a73e8;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  letter-spacing: 0.1px;
+}
+
+.download-btn:hover:not(:disabled) { background: #1557b0; }
+.download-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Instructions */
+.instructions {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f1f3f4;
+}
+
+.instructions h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.instructions ol {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.instructions li {
+  font-size: 0.875rem;
+  color: #3c4043;
+  line-height: 1.5;
+}
+
+.instructions strong { color: #202124; }
+
+/* Community feed */
+.community h2 { margin-bottom: 6px; }
+
+.community .subtitle { margin-bottom: 16px; }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  background: #f1f3f4;
+  border: 1px solid #e8eaed;
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  color: #3c4043;
+  line-height: 1.4;
+}
+
+.chip:hover {
+  background: #e8f0fe;
+  border-color: #1a73e8;
+  color: #1a73e8;
+}
+
+.chip .chip-pattern { font-weight: 500; }
+
+.chip .chip-arrow {
+  color: #9aa0a6;
+  margin: 0 4px;
+  font-size: 0.7rem;
+}
+
+.chip .chip-label { color: #5f6368; }
+
+.chip:hover .chip-arrow,
+.chip:hover .chip-label { color: #1a73e8; }
+
+.chip .chip-count {
+  margin-left: 6px;
+  background: #e8eaed;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  color: #80868b;
+}
+
+.chip:hover .chip-count { background: #c5d7f7; color: #1557b0; }
+
+.empty-feed {
+  font-size: 0.875rem;
+  color: #9aa0a6;
+  font-style: italic;
+}
+
+.added-notice {
+  display: none;
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: #34a853;
+  font-weight: 500;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/">
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="32" height="32" rx="6" fill="#1a73e8"/>
+      <path d="M6 11l10 7.5L26 11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="6" y="11" width="20" height="13" rx="1" stroke="#fff" stroke-width="1.8" fill="none"/>
+    </svg>
+    <span class="logo-name">filtergmail.com</span>
+  </a>
+  <span class="header-tagline">Control your inbox</span>
+</header>
+
+<main>
+  <div class="layout">
+
+    <!-- Filter builder -->
+    <div class="card">
+      <h2>Build your filters</h2>
+      <p class="subtitle">Enter keywords, phrases, or sender addresses. We'll create Gmail filter rules that move matching emails to the label you choose — automatically skipping your inbox.</p>
+
+      <table class="filter-table">
+        <thead>
+          <tr>
+            <th>Keyword, phrase, or sender</th>
+            <th>Label</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="filter-rows"></tbody>
+      </table>
+
+      <div class="table-footer">
+        <button class="add-btn" id="add-btn">+ Add row</button>
+        <span class="row-counter"><span class="count" id="row-count">0</span> / 5 filters</span>
+      </div>
+
+      <button class="download-btn" id="download-btn" disabled>Download Gmail filters XML</button>
+
+      <div class="instructions">
+        <h3>How to import into Gmail</h3>
+        <ol>
+          <li>Click <strong>Download Gmail filters XML</strong> above — save the file anywhere.</li>
+          <li>In Gmail, click the gear icon ⚙ → <strong>See all settings</strong></li>
+          <li>Click the <strong>Filters and Blocked Addresses</strong> tab</li>
+          <li>Scroll to the bottom → click <strong>Import filters</strong></li>
+          <li>Choose the downloaded file → <strong>Open file</strong> → <strong>Create filters</strong></li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Community inspiration -->
+    <div class="card community">
+      <h2>What people are filtering</h2>
+      <p class="subtitle">Click any pattern to add it to your filters.</p>
+      <div class="chips" id="chips">
+        {% if top_patterns %}
+          {% for p in top_patterns %}
+          <span class="chip"
+                data-pattern="{{ p.pattern }}"
+                data-label="{{ p.label }}"
+                data-field="{{ p.field }}">
+            <span class="chip-pattern">{{ p.pattern }}</span>
+            <span class="chip-arrow">→</span>
+            <span class="chip-label">{{ p.label }}</span>
+            {% if p.count > 1 %}
+            <span class="chip-count">{{ p.count }}</span>
+            {% endif %}
+          </span>
+          {% endfor %}
+        {% else %}
+          <p class="empty-feed">No patterns yet — be the first to add some!</p>
+        {% endif %}
+      </div>
+      <p class="added-notice" id="added-notice">✓ Added to your filters</p>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const MAX_ROWS = 5;
+let rows = [];
+
+function renderRows() {
+  const tbody = document.getElementById('filter-rows');
+  tbody.innerHTML = '';
+
+  rows.forEach((row, i) => {
+    const tr = document.createElement('tr');
+    tr.className = 'filter-row';
+    tr.innerHTML = `
+      <td><input type="text" placeholder="e.g. last call, noreply@shop.com" value="${esc(row.pattern)}" data-i="${i}" data-field="pattern"></td>
+      <td><input type="text" placeholder="e.g. Promotions" value="${esc(row.label)}" data-i="${i}" data-field="label"></td>
+      <td><button class="remove-btn" data-i="${i}" title="Remove">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('row-count').textContent = rows.length;
+  document.getElementById('add-btn').disabled = rows.length >= MAX_ROWS;
+  document.getElementById('download-btn').disabled = !rows.some(r => r.pattern.trim() && r.label.trim());
+}
+
+function esc(str) {
+  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+
+document.getElementById('filter-rows').addEventListener('input', e => {
+  const i = +e.target.dataset.i;
+  const field = e.target.dataset.field;
+  if (field && i >= 0) {
+    rows[i][field] = e.target.value;
+    document.getElementById('download-btn').disabled = !rows.some(r => r.pattern.trim() && r.label.trim());
+  }
+});
+
+document.getElementById('filter-rows').addEventListener('click', e => {
+  const btn = e.target.closest('.remove-btn');
+  if (btn) {
+    rows.splice(+btn.dataset.i, 1);
+    renderRows();
+  }
+});
+
+document.getElementById('add-btn').addEventListener('click', () => {
+  if (rows.length < MAX_ROWS) {
+    rows.push({ pattern: '', label: '' });
+    renderRows();
+    const inputs = document.querySelectorAll('#filter-rows .filter-row:last-child input');
+    if (inputs[0]) inputs[0].focus();
+  }
+});
+
+document.getElementById('download-btn').addEventListener('click', async () => {
+  const valid = rows.filter(r => r.pattern.trim() && r.label.trim());
+  if (!valid.length) return;
+
+  const btn = document.getElementById('download-btn');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+
+  try {
+    const resp = await fetch('/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows: valid }),
+    });
+
+    if (!resp.ok) throw new Error('Server error');
+
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gmail_filters.xml';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Something went wrong. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Download Gmail filters XML';
+  }
+});
+
+// Community chips
+document.getElementById('chips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+
+  if (rows.length >= MAX_ROWS) {
+    alert('You\'ve reached the limit of 5 filters. Remove one to add more.');
+    return;
+  }
+
+  const pattern = chip.dataset.pattern;
+  const label = chip.dataset.label;
+
+  // Don't add duplicates
+  if (rows.some(r => r.pattern.toLowerCase() === pattern.toLowerCase())) return;
+
+  rows.push({ pattern, label, field: chip.dataset.field });
+  renderRows();
+
+  const notice = document.getElementById('added-notice');
+  notice.style.display = 'block';
+  clearTimeout(notice._t);
+  notice._t = setTimeout(() => notice.style.display = 'none', 2000);
+});
+
+// Start with one empty row
+rows.push({ pattern: '', label: '' });
+renderRows();
+</script>
+</body>
+</html>

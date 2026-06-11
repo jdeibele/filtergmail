@@ -1,0 +1,19 @@
+# docker-compose.yml — filtergmail.com | v1.0.0 | 2026-06-11
+services:
+  web:
+    build: .
+    restart: always
+    ports:
+      - "127.0.0.1:5060:5060"
+    volumes:
+      - ./templates:/app/templates
+      - ./data:/data
+    environment:
+      FILTERGMAIL_DB: /data/filtergmail.db
+      PORT: "5060"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5060/"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
