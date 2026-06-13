@@ -74,3 +74,15 @@ Do NOT write to /workspace/blogsreader or /workspace/mypages.
 
 ## Free tier limit
 `FREE_TIER_LIMIT = 5` in filtergmail_web.py. Enforced server-side on /download.
+
+## Known issues / tech debt
+
+**GitHub Actions deploy broken**: The `OVH_SSH_KEY` secret in the filtergmail repo is incorrect. Fix by copying the working value from the blogsreader or mypages repo secrets (same server, same key). Until fixed, deploy manually via SSH.
+
+**Community feed threshold too low**: `/download` records patterns at count ≥ 1, and the feed displays at count ≥ 1. With real traffic, bump the display threshold to ≥ 3 or ≥ 5 to filter out one-off patterns. Leave at 1 until there is meaningful traffic.
+
+**`anthropic` in requirements.txt but unused**: Adds ~50MB to the Docker image with no benefit until Stage 4. Remove it from requirements.txt in Stage 1/2/3 and add back when screenshot analysis is built.
+
+**No structured logging**: Flask runs in production mode with no application-level logging. Errors and download events are only captured by nginx access logs. Add logging before Stage 4 when payments are involved.
+
+**No rate limiting**: `/download` has no rate limiting — repeated calls rack up DB writes. Negligible risk at current scale. Add before Stage 4.
