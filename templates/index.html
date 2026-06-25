@@ -317,13 +317,26 @@ main {
     <!-- Filter builder -->
     <div class="card">
       <h2>Build your filters</h2>
-      <p class="subtitle">Enter keywords, phrases, or sender addresses. We'll create Gmail filter rules that move matching emails to the label you choose — automatically skipping your inbox.</p>
+      <p class="subtitle">Two ways in: <strong>paste one annoying email</strong> for a quick filter, or
+        build up a list below and download them all at once — you only import to Gmail <em>once</em>.</p>
+
+      <!-- Quick on-ramp: paste a message → suggested filter -->
+      <div class="paste-box" style="margin:0 0 18px">
+        <textarea id="paste-input" rows="3" style="width:100%;font:inherit;font-size:13.5px;padding:10px 12px;
+          border:1px solid #dadce0;border-radius:8px;resize:vertical"
+          placeholder="Paste a junk email's details here — in Gmail: ⋮ → 'Show original', or just the from/subject lines. We'll suggest a safe filter and add it below."></textarea>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+          <button class="add-btn" id="paste-btn" type="button">Suggest a filter →</button>
+          <span class="paste-msg" id="paste-msg" style="font-size:12.5px;color:#5f6368"></span>
+        </div>
+      </div>
 
       <table class="filter-table">
         <thead>
           <tr>
             <th>Keyword, phrase, or sender</th>
             <th>Label</th>
+            <th>Do what?</th>
             <th></th>
           </tr>
         </thead>
@@ -335,7 +348,21 @@ main {
         <span class="row-counter"><span class="count" id="row-count">0</span> / {{ max_rows }} filters</span>
       </div>
 
-      <button class="download-btn" id="download-btn" disabled>Download Gmail filters XML</button>
+      <div class="dl-controls" style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:14px 0 10px;font-size:13px;color:#5f6368">
+        <label>Format
+          <select id="dl-format" style="font:inherit;padding:4px 6px">
+            <option value="xml">Gmail (XML)</option>
+            <option value="yaml">YAML</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+        </label>
+        <label title="Merge senders that share a label into one rule — fewer filters, stays under Gmail's ~500 cap">
+          <input type="checkbox" id="dl-consolidate"> Combine senders per label
+        </label>
+      </div>
+
+      <button class="download-btn" id="download-btn" disabled>Download filters</button>
 
       <div class="instructions">
         <h3>How to import into Gmail</h3>
@@ -367,6 +394,14 @@ main {
           <a href="https://codebeautify.org/xmlviewer" target="_blank" rel="noopener">CodeBeautify</a>
           — no install.</p>
       </details>
+    </div>
+
+    <!-- Starter packs: senders everyone has -->
+    <div class="card">
+      <h2>Starter packs</h2>
+      <p class="subtitle">Senders everyone has — click to add. We label them, and keep the important
+        ones (banks, bills) in your inbox so nothing urgent gets hidden.</p>
+      <div id="starter-packs"><p class="subtitle" style="opacity:.6">Loading…</p></div>
     </div>
 
     <!-- Community inspiration -->
@@ -401,7 +436,7 @@ main {
 <footer style="max-width:1080px;margin:32px auto 24px;padding:16px 20px;border-top:1px solid #e5e7eb;
                 color:#9aa0a6;font-size:12px;line-height:1.6;text-align:center">
   Filters are generated in your browser and downloaded as a file — {{ brand }} never connects to
-  your Google account or sees your email.<br>
+  your Google account or sees your email. <a href="/roll-your-own" style="color:#1a73e8">How Gmail filters work ›</a><br>
   {{ brand }} is an independent tool, not affiliated with, endorsed by, or sponsored by Google.
   Gmail is a trademark of Google&nbsp;LLC.
 </footer>
@@ -417,9 +452,15 @@ function renderRows() {
   rows.forEach((row, i) => {
     const tr = document.createElement('tr');
     tr.className = 'filter-row';
+    const act = row.action || 'keep';
     tr.innerHTML = `
       <td><input type="text" placeholder="e.g. last call, noreply@shop.com" value="${esc(row.pattern)}" data-i="${i}" data-field="pattern"></td>
       <td><input type="text" placeholder="e.g. Promotions" value="${esc(row.label)}" data-i="${i}" data-field="label"></td>
+      <td><select data-i="${i}" data-field="action" style="font:inherit;padding:6px 4px">
+        <option value="keep"${act==='keep'?' selected':''}>Label only</option>
+        <option value="archive"${act==='archive'?' selected':''}>Skip inbox</option>
+        <option value="trash"${act==='trash'?' selected':''}>Delete</option>
+      </select></td>
       <td><button class="remove-btn" data-i="${i}" title="Remove">✕</button></td>
     `;
     tbody.appendChild(tr);
@@ -453,7 +494,7 @@ document.getElementById('filter-rows').addEventListener('click', e => {
 
 document.getElementById('add-btn').addEventListener('click', () => {
   if (rows.length < MAX_ROWS) {
-    rows.push({ pattern: '', label: '' });
+    rows.push({ pattern: '', label: '', action: 'keep' });
     renderRows();
     const inputs = document.querySelectorAll('#filter-rows .filter-row:last-child input');
     if (inputs[0]) inputs[0].focus();
@@ -461,9 +502,13 @@ document.getElementById('add-btn').addEventListener('click', () => {
 });
 
 document.getElementById('download-btn').addEventListener('click', async () => {
-  const valid = rows.filter(r => r.pattern.trim() && r.label.trim());
+  const valid = rows.filter(r => r.pattern.trim() && r.label.trim())
+                    .map(r => ({ pattern: r.pattern.trim(), label: r.label.trim(),
+                                 action: r.action || 'keep', field: r.field }));
   if (!valid.length) return;
 
+  const fmt = document.getElementById('dl-format').value || 'xml';
+  const consolidate = document.getElementById('dl-consolidate').checked;
   const btn = document.getElementById('download-btn');
   btn.disabled = true;
   btn.textContent = 'Generating…';
@@ -472,7 +517,7 @@ document.getElementById('download-btn').addEventListener('click', async () => {
     const resp = await fetch('/download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows: valid }),
+      body: JSON.stringify({ filters: valid, format: fmt, consolidate }),
     });
 
     if (!resp.ok) throw new Error('Server error');
@@ -481,14 +526,14 @@ document.getElementById('download-btn').addEventListener('click', async () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'gmail_filters.xml';
+    a.download = 'gmail_filters.' + fmt;
     a.click();
     URL.revokeObjectURL(url);
   } catch (err) {
     alert('Something went wrong. Please try again.');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Download Gmail filters XML';
+    btn.textContent = 'Download filters';
   }
 });
 
@@ -511,7 +556,7 @@ document.getElementById('chips').addEventListener('click', e => {
                   && (r.label || '').toLowerCase() === (label || '').toLowerCase()
                   && (r.field || '') === (field || ''))) return;
 
-  rows.push({ pattern, label, field });
+  rows.push({ pattern, label, field, action: 'keep' });
   renderRows();
 
   const notice = document.getElementById('added-notice');
@@ -520,8 +565,65 @@ document.getElementById('chips').addEventListener('click', e => {
   notice._t = setTimeout(() => notice.style.display = 'none', 2000);
 });
 
+// Quick on-ramp: paste an email → /parse → suggested filter dropped into the list
+document.getElementById('paste-btn').addEventListener('click', async () => {
+  const ta = document.getElementById('paste-input');
+  const msg = document.getElementById('paste-msg');
+  const text = ta.value.trim();
+  if (!text) { msg.textContent = 'Paste an email first.'; return; }
+  msg.textContent = 'Analyzing…';
+  try {
+    const resp = await fetch('/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ text }) });
+    const data = await resp.json();
+    if (!resp.ok || !data.filter) {
+      msg.textContent = (data && (data.error || data.reason)) || "Couldn't suggest a filter — try the from/subject lines.";
+      return;
+    }
+    const f = data.filter;
+    const field = f.from ? 'from' : (f.subject ? 'subject' : 'hasTheWord');
+    const action = f.shouldTrash === 'true' ? 'trash' : (f.shouldArchive === 'true' ? 'archive' : 'keep');
+    rows.push({ pattern: f[field] || '', label: f.label || 'Junk mail', field, action });
+    renderRows();
+    ta.value = '';
+    msg.textContent = '✓ Added — ' + (data.reason || '').slice(0, 130);
+  } catch (e) { msg.textContent = 'Something went wrong.'; }
+});
+
+// Starter packs: senders everyone has → click a chip to add it
+fetch('/api/starter').then(r => r.json()).then(cat => {
+  const host = document.getElementById('starter-packs');
+  if (!host) return;
+  host.innerHTML = '';
+  Object.keys(cat).forEach(name => {
+    const block = cat[name];
+    const h = document.createElement('div');
+    h.style.cssText = 'margin:12px 0 4px;font-weight:600;font-size:13px';
+    h.textContent = name;
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    block.senders.forEach(s => {
+      const c = document.createElement('span');
+      c.className = 'chip';
+      c.style.cursor = 'pointer';
+      c.innerHTML = '<span class="chip-pattern">' + esc(s.name) + '</span>';
+      c.addEventListener('click', () => {
+        if (rows.some(r => (r.pattern || '').toLowerCase() === s.domain && (r.label || '') === name)) return;
+        rows.push({ pattern: s.domain, label: name, field: 'from', action: block.action });
+        renderRows();
+      });
+      chips.appendChild(c);
+    });
+    host.appendChild(h);
+    host.appendChild(chips);
+  });
+}).catch(() => {
+  const h = document.getElementById('starter-packs');
+  if (h) h.innerHTML = '<p class="subtitle" style="opacity:.6">Starter packs unavailable right now.</p>';
+});
+
 // Start with one empty row
-rows.push({ pattern: '', label: '' });
+rows.push({ pattern: '', label: '', action: 'keep' });
 renderRows();
 </script>
 </body>

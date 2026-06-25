@@ -8,9 +8,11 @@ import sqlite3
 from flask import Flask, g, jsonify, render_template, request, Response
 
 from gmail_filter import (MATCHING_FIELDS, build_filters, generate_gmail_xml,
-                          audit_filters, parse_gmail_xml)
+                          audit_filters, parse_gmail_xml, build_safe_filter,
+                          consolidate_by_label, detect_field)
 import gmail_paste
 import starter_filters
+import formats
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
@@ -105,37 +107,63 @@ def index():
                            brand=BRAND, tagline=TAGLINE)
 
 
+def _rows_to_filters(rows):
+    """Turn the UI's working-list rows into safe filter dicts. Each row:
+    {pattern|<field>, label, action?, field?}. Action defaults to 'trash' (every row already
+    carries a reason-label; build_safe_filter enforces the safety rules)."""
+    built = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        label = (r.get("label") or "").strip()[:MAX_FIELD_LEN]
+        action = (r.get("action") or "trash").strip().lower()
+        crit = {}
+        for k in MATCHING_FIELDS:
+            v = r.get(k)
+            if isinstance(v, str) and v.strip():
+                crit[k] = v.strip()[:MAX_FIELD_LEN]
+        if not crit:                                   # legacy {pattern, field?}
+            pat = (r.get("pattern") or "").strip()[:MAX_FIELD_LEN]
+            if pat:
+                fld = r.get("field") if r.get("field") in MATCHING_FIELDS else detect_field(pat)
+                crit = {fld: pat}
+        if not crit or not label:
+            continue
+        try:
+            f, _ = build_safe_filter(crit, label, action)
+            built.append(f)
+        except ValueError:
+            continue
+    return built
+
+
 @app.route("/download", methods=["POST"])
 def download():
     data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not data.get("rows"):
-        return jsonify({"error": "No rows provided"}), 400
-    if not isinstance(data["rows"], list):
-        return jsonify({"error": "rows must be a list"}), 400
-
-    rows = [
-        r for r in data["rows"]
-        if isinstance(r, dict)
-        and isinstance(r.get("pattern"), str) and r["pattern"].strip()
-        and len(r["pattern"]) <= MAX_FIELD_LEN
-        and isinstance(r.get("label"), str) and r["label"].strip()
-        and len(r["label"]) <= MAX_FIELD_LEN
-    ]
-    if not rows:
-        return jsonify({"error": "No valid rows"}), 400
-
+    if not isinstance(data, dict):
+        return jsonify({"error": "No data"}), 400
+    rows = data.get("filters") or data.get("rows")    # new model | legacy
+    if not isinstance(rows, list) or not rows:
+        return jsonify({"error": "No filters provided"}), 400
     if len(rows) > FREE_TIER_LIMIT:
-        return jsonify({"error": f"Free tier allows up to {FREE_TIER_LIMIT} filters; received {len(rows)}"}), 400
+        return jsonify({"error": f"Up to {FREE_TIER_LIMIT} filters at a time; received {len(rows)}"}), 400
 
-    filters = build_filters(rows)
-    _record_patterns(filters)
+    built = _rows_to_filters(rows)
+    if not built:
+        return jsonify({"error": "No valid filters (each needs a pattern and a label)."}), 400
+    _record_patterns(built)
+    if data.get("consolidate"):
+        built = consolidate_by_label(built)
 
-    xml = generate_gmail_xml(filters)
-    return Response(
-        xml,
-        mimetype="application/xml",
-        headers={"Content-Disposition": "attachment; filename=gmail_filters.xml"},
-    )
+    fmt = (data.get("format") or "xml").lower()
+    if fmt in formats.EXPORTERS:
+        body = formats.EXPORTERS[fmt](built)
+        mime = "application/json" if fmt == "json" else "text/plain; charset=utf-8"
+        ext = fmt
+    else:
+        body, mime, ext = generate_gmail_xml(built), "application/xml", "xml"
+    return Response(body, mimetype=mime, headers={
+        "Content-Disposition": f"attachment; filename=gmail_filters.{ext}"})
 
 
 @app.route("/parse", methods=["POST"])
