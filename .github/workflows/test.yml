@@ -1,0 +1,20 @@
+# test.yml — filtergmail.com tests | v1.0.0 | 2026-06-25
+# Runs the paste-parser + safety-rule tests on every push/PR. No third-party deps:
+# gmail_filter.py and gmail_paste.py are stdlib-only, and the test file runs standalone.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run tests
+        run: python3 tests/test_filtergmail.py

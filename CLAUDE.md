@@ -49,16 +49,42 @@ WAL mode enabled. Patterns recorded on every XML download (anonymous, lowercase)
 - `shouldArchive: true` — all filters skip inbox by default
 
 ## Staged rollout plan
-- **Stage 1 (live)**: Up to 5 keyword/label pairs, download XML, community inspiration feed
-- **Stage 2**: CSV upload + export (~3-4 weeks)
-- **Stage 3**: Editing/persistence, merge with existing XML (~3-4 weeks)
-- **Stage 4**: Screenshot analysis via Claude Vision, payment integration (~3-4 weeks)
+- **Stage 1 (live)**: keyword/label pairs → download XML, community inspiration feed
+- **Stage 2**: CSV upload + export
+- **Stage 3**: "Bring your existing mailFilters.xml" — import → tidy/organize → re-export.
+  (Jim's own `jim/gmail-filters/` YAML↔XML workflow is the working prototype of this; his
+  real 80-filter set is the reference fixture.)
+- **Stage 4 (REPLACED)**: Claude Vision screenshot analysis was abandoned (Jim: "really tough
+  to get right"). Replaced by the **paste-the-Gmail-details** parser (`gmail_paste.py`): the
+  user pastes the text Gmail shows for a message; we decide sender-vs-subject and emit one safe
+  filter. A cheap **text** LLM pass (rank durable subject phrases / judge disposable domains)
+  is the future enhancement — far more tractable than Vision.
 
-## Business model
-- Free: up to 5 filters per session
-- Paid ($4.99 one-time): unlimited text entry + 10 screenshot analyses (Stage 4)
-- No subscriptions. Credits don't expire.
-- Entity: Oregon LLC under Jim's umbrella company
+## Business model — FREE (2026-06-25)
+- **Not charging.** The $4.99 paid tier is dropped. `FREE_TIER_LIMIT = 100` is now just an
+  abuse ceiling, not a paywall.
+- Entity: Oregon LLC under Jim's umbrella company.
+- **Trademark / rename plan:** launch + publicize as filtergmail.com. The brand is a single
+  env constant (`FILTERGMAIL_BRAND` / `FILTERGMAIL_TAGLINE`), so if Google sends a C&D over the
+  "gmail" domain, the rename is one env change + a new domain (Jim is acquiring a backup) — and
+  the rename itself becomes a second publicity beat. A trademark disclaimer ("independent tool,
+  not affiliated with Google; Gmail is a trademark of Google LLC") is in the footer.
+
+## Safety model — the spine of trust (gmail_filter.build_safe_filter)
+Two rules from Jim's real, battle-tested filter set, so we never quietly delete on a hunch:
+1. **The label is the receipt.** Every filter MUST carry a reason-label (`Junk mail/<reason>`),
+   so a trashed/archived message tells you WHY — `in:trash label:"Junk mail/Subject Spam"`.
+2. **Action scales with confidence.** archive/trash are *auditable* (survive under the label /
+   in Trash 30 days) → allowed on one field. `mark-as-read` is *silent & unrecoverable* → needs
+   ≥2 matching criteria; on a single field it's downgraded to trash with a warning.
+Together: every action is auditable OR high-confidence — never both silent and low-confidence.
+
+## Paste parser (gmail_paste.py)
+`analyze(pasted_details_text)` → decides **sender** (stable From domain → `from:` on the
+registrable domain, kills rotating subdomains) vs **subject** (disposable/forged sender →
+durable subject phrase, dates/names/numbers stripped). Emits via `build_safe_filter`. Heuristic
+registrable-domain + disposable detection; the hard calls are the LLM's future job. Tests in
+`tests/test_filtergmail.py` (run `python3 tests/test_filtergmail.py`; no pytest needed).
 
 ## Templates
 `templates/` is volume-mounted — editing index.html on the server takes effect immediately without rebuilding the Docker image. For Python file changes, rebuild is required.
@@ -73,7 +99,8 @@ Do NOT write to /workspace/blogsreader or /workspace/mypages.
 - No ANTHROPIC_API_KEY needed until Stage 4
 
 ## Free tier limit
-`FREE_TIER_LIMIT = 5` in filtergmail_web.py. Enforced server-side on /download.
+`FREE_TIER_LIMIT = 100` in filtergmail_web.py (abuse ceiling, not a paywall — the tool is
+free). Enforced server-side on /download; the route passes it to the template as `max_rows`.
 
 ## Known issues / tech debt
 

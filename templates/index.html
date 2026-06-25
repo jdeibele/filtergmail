@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>filtergmail.com — Control your inbox</title>
+<title>{{ brand }} — {{ tagline }}</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -306,9 +306,9 @@ main {
       <path d="M6 11l10 7.5L26 11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       <rect x="6" y="11" width="20" height="13" rx="1" stroke="#fff" stroke-width="1.8" fill="none"/>
     </svg>
-    <span class="logo-name">filtergmail.com</span>
+    <span class="logo-name">{{ brand }}</span>
   </a>
-  <span class="header-tagline">Control your inbox</span>
+  <span class="header-tagline">{{ tagline }}</span>
 </header>
 
 <main>
@@ -332,7 +332,7 @@ main {
 
       <div class="table-footer">
         <button class="add-btn" id="add-btn">+ Add row</button>
-        <span class="row-counter"><span class="count" id="row-count">0</span> / 5 filters</span>
+        <span class="row-counter"><span class="count" id="row-count">0</span> / {{ max_rows }} filters</span>
       </div>
 
       <button class="download-btn" id="download-btn" disabled>Download Gmail filters XML</button>
@@ -378,8 +378,16 @@ main {
   </div>
 </main>
 
+<footer style="max-width:1080px;margin:32px auto 24px;padding:16px 20px;border-top:1px solid #e5e7eb;
+                color:#9aa0a6;font-size:12px;line-height:1.6;text-align:center">
+  Filters are generated in your browser and downloaded as a file — {{ brand }} never connects to
+  your Google account or sees your email.<br>
+  {{ brand }} is an independent tool, not affiliated with, endorsed by, or sponsored by Google.
+  Gmail is a trademark of Google&nbsp;LLC.
+</footer>
+
 <script>
-const MAX_ROWS = 5;
+const MAX_ROWS = {{ max_rows }};
 let rows = [];
 
 function renderRows() {
@@ -403,7 +411,7 @@ function renderRows() {
 }
 
 function esc(str) {
-  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 document.getElementById('filter-rows').addEventListener('input', e => {
@@ -470,17 +478,20 @@ document.getElementById('chips').addEventListener('click', e => {
   if (!chip) return;
 
   if (rows.length >= MAX_ROWS) {
-    alert('You\'ve reached the limit of 5 filters. Remove one to add more.');
+    alert('You\'ve reached the limit of ' + MAX_ROWS + ' filters. Remove one to add more.');
     return;
   }
 
   const pattern = chip.dataset.pattern;
   const label = chip.dataset.label;
+  const field = chip.dataset.field;
 
-  // Don't add duplicates
-  if (rows.some(r => r.pattern.toLowerCase() === pattern.toLowerCase())) return;
+  // Don't add duplicates (match the DB's UNIQUE(pattern, label, field))
+  if (rows.some(r => r.pattern.toLowerCase() === pattern.toLowerCase()
+                  && (r.label || '').toLowerCase() === (label || '').toLowerCase()
+                  && (r.field || '') === (field || ''))) return;
 
-  rows.push({ pattern, label, field: chip.dataset.field });
+  rows.push({ pattern, label, field });
   renderRows();
 
   const notice = document.getElementById('added-notice');

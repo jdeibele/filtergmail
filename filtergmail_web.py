@@ -7,13 +7,27 @@ import sqlite3
 
 from flask import Flask, g, jsonify, render_template, request, Response
 
-from gmail_filter import build_filters, detect_field, generate_gmail_xml
+from gmail_filter import MATCHING_FIELDS, build_filters, generate_gmail_xml
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
 
 DB_PATH = os.environ.get("FILTERGMAIL_DB", "/data/filtergmail.db")
-FREE_TIER_LIMIT = 5
+# The product is free. This is no longer a paywall — just a sane abuse ceiling so one
+# request can't paste 10k rows and hammer the DB. (Jim 2026-06-25: "we're not charging".)
+FREE_TIER_LIMIT = 100
+MAX_FIELD_LEN = 200
+
+# Brand is a single env-driven constant so a forced rename (if Google objects to the
+# "gmail" trademark in the domain) is one config change + a new domain — no code edit.
+# Strategy: launch + publicize as filtergmail.com; flip BRAND/DOMAIN and publicize the
+# rename if/when a cease-and-desist arrives.
+BRAND = os.environ.get("FILTERGMAIL_BRAND", "filtergmail.com")
+TAGLINE = os.environ.get("FILTERGMAIL_TAGLINE", "Control your inbox")
+# Minimum count for a pattern to appear in the community feed. Stage 1 shows
+# everything (>= 1); bump to 3 or 5 once there is meaningful traffic to filter
+# out one-off patterns (see CLAUDE.md "Known issues / tech debt").
+FEED_MIN_COUNT = 1
 
 
 def get_db():
@@ -28,7 +42,7 @@ def get_db():
 @app.teardown_appcontext
 def close_db(e=None):
     db = g.pop("db", None)
-    if db:
+    if db is not None:
         db.close()
 
 
@@ -47,12 +61,17 @@ def _migrate(conn):
     conn.commit()
 
 
-def _record_patterns(rows):
+def _record_patterns(filters):
+    # `filters` are the enriched dicts from build_filters: pattern/label already
+    # stripped, blanks dropped, and the matching field resolved via safe_field.
+    # Reuse that work instead of re-validating the raw rows here.
     db = get_db()
-    for row in rows:
-        pattern = row.get("pattern", "").strip().lower()
-        label = row.get("label", "").strip()
-        field = row.get("field") or detect_field(row.get("pattern", ""))
+    for f in filters:
+        field = next((k for k in f if k in MATCHING_FIELDS), None)
+        if field is None:
+            continue
+        pattern = f[field].strip().lower()
+        label = f["label"].strip()
         if pattern and label:
             db.execute("""
                 INSERT INTO patterns (pattern, label, field, count) VALUES (?, ?, ?, 1)
@@ -66,33 +85,44 @@ def _top_patterns(limit=40):
     rows = db.execute("""
         SELECT pattern, label, field, count
         FROM patterns
-        WHERE count >= 1
+        WHERE count >= ?
         ORDER BY count DESC, pattern ASC
         LIMIT ?
-    """, (limit,)).fetchall()
+    """, (FEED_MIN_COUNT, limit)).fetchall()
     return [dict(r) for r in rows]
 
 
 @app.route("/")
 def index():
     top = _top_patterns()
-    return render_template("index.html", top_patterns=top)
+    return render_template("index.html", top_patterns=top, max_rows=FREE_TIER_LIMIT,
+                           brand=BRAND, tagline=TAGLINE)
 
 
 @app.route("/download", methods=["POST"])
 def download():
-    data = request.get_json()
-    if not data or not data.get("rows"):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not data.get("rows"):
         return jsonify({"error": "No rows provided"}), 400
+    if not isinstance(data["rows"], list):
+        return jsonify({"error": "rows must be a list"}), 400
 
-    rows = [r for r in data["rows"] if r.get("pattern", "").strip() and r.get("label", "").strip()]
-    rows = rows[:FREE_TIER_LIMIT]
-
+    rows = [
+        r for r in data["rows"]
+        if isinstance(r, dict)
+        and isinstance(r.get("pattern"), str) and r["pattern"].strip()
+        and len(r["pattern"]) <= MAX_FIELD_LEN
+        and isinstance(r.get("label"), str) and r["label"].strip()
+        and len(r["label"]) <= MAX_FIELD_LEN
+    ]
     if not rows:
         return jsonify({"error": "No valid rows"}), 400
 
+    if len(rows) > FREE_TIER_LIMIT:
+        return jsonify({"error": f"Free tier allows up to {FREE_TIER_LIMIT} filters; received {len(rows)}"}), 400
+
     filters = build_filters(rows)
-    _record_patterns(rows)
+    _record_patterns(filters)
 
     xml = generate_gmail_xml(filters)
     return Response(
