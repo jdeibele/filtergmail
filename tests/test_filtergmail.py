@@ -7,8 +7,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from gmail_filter import build_safe_filter, generate_gmail_xml, parse_gmail_xml
+from gmail_filter import (build_safe_filter, generate_gmail_xml, parse_gmail_xml,
+                          audit_filters)
 import gmail_paste as gp
+import starter_filters as sf
 
 # Real-world spam, exactly as Gmail's "details" block renders it (Jim's two examples).
 EX_SENDER = """from:    Harbor.Freight.Surprise <fsfawkr@oopppmaj.hhi.yourwebsitesortedssl.com>
@@ -103,6 +105,54 @@ def test_generated_xml_roundtrips():
     assert len(back) == 2
     assert back[0]["from"] == "yourwebsitesortedssl.com"
     assert all("label" in f for f in back), "every filter must keep its reason-label"
+
+
+# ── 'keep' action (starter filters: label only, stays in inbox) ──────────────────
+
+def test_keep_action_is_label_only():
+    f, warns = build_safe_filter({"from": "chase.com"}, "Banking", action="keep")
+    assert f.get("label") == "Banking"
+    assert "shouldArchive" not in f and "shouldTrash" not in f and "shouldMarkAsRead" not in f
+    assert not warns
+
+
+# ── audit existing filters (/analyze) ───────────────────────────────────────────
+
+def test_audit_flags_violations():
+    filters = [
+        {"from": "a.com", "shouldTrash": "true"},                       # no label
+        {"from": "b.com", "shouldMarkAsRead": "true", "label": "X"},    # read on 1 field
+        {"from": "amazon.com", "label": "Shop", "shouldArchive": "true"},
+        {"from": "amazon.com", "label": "Promo", "shouldArchive": "true"},  # dup sender
+    ]
+    rep = audit_filters(filters)
+    types = {i["type"] for i in rep["issues"]}
+    assert "no_label" in types
+    assert "read_low_confidence" in types
+    assert "amazon.com" in rep["duplicate_senders"]
+    assert rep["count"] == 4
+
+
+# ── starter-filter library ───────────────────────────────────────────────────────
+
+def test_starter_catalog_shape():
+    cat = sf.starter_catalog()
+    assert "Banking" in cat and "Social" in cat
+    assert cat["Banking"]["action"] == "keep"      # don't hide bank mail
+    assert cat["Social"]["action"] == "archive"    # promotional, fine to file
+    assert any(s["domain"] == "chase.com" for s in cat["Banking"]["senders"])
+
+def test_build_starter_filters_uses_safe_actions():
+    filters, warns = sf.build_starter_filters([
+        {"domain": "chase.com"},          # Banking -> keep (label only, stays in inbox)
+        {"domain": "facebookmail.com"},   # Social  -> archive
+        {"domain": "nope.invalid"},       # unknown -> skipped
+    ])
+    assert len(filters) == 2
+    chase = next(f for f in filters if f["from"] == "chase.com")
+    assert chase["label"] == "Banking" and "shouldArchive" not in chase  # kept in inbox
+    fb = next(f for f in filters if f["from"] == "facebookmail.com")
+    assert fb["label"] == "Social" and fb["shouldArchive"] == "true"
 
 
 if __name__ == "__main__":

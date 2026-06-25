@@ -95,6 +95,7 @@ def build_filters(rows: list[dict]) -> list[dict]:
 #     matching criteria; asked for on a single field it is DOWNGRADED to trash
 #     (auditable) with a warning.
 ACTION_PROPS = {
+    "keep":    {},                                                      # label only, stays in inbox
     "archive": {"shouldArchive": "true"},                               # skip inbox, keep
     "trash":   {"shouldTrash": "true"},                                 # Trash (30d, auditable)
     "read":    {"shouldMarkAsRead": "true", "shouldArchive": "true"},   # silent auto-handle
@@ -169,6 +170,33 @@ def generate_gmail_xml(filters: list[dict]) -> str:
 MAX_XML_BYTES = 1 * 1024 * 1024  # 1 MiB
 _DOCTYPE_RE = re.compile(rb"<!DOCTYPE", re.IGNORECASE)
 _ENTITY_RE = re.compile(rb"<!ENTITY", re.IGNORECASE)
+
+
+def audit_filters(filters: list[dict]) -> dict:
+    """Audit an existing parsed filter list against the safety model + light hygiene —
+    backs the 'bring your existing filters' (/analyze) feature. Returns a report dict:
+      count, issues[{type,msg,filter}], duplicate_senders{value:[indexes]}, labels{label:n}.
+    """
+    issues, seen_from, labels = [], {}, {}
+    for i, f in enumerate(filters):
+        crit = {k: f[k] for k in f if k in MATCHING_FIELDS}
+        label = f.get("label")
+        acted = any(f.get(a) == "true" for a in ("shouldTrash", "shouldArchive", "shouldMarkAsRead"))
+        if acted and not label:
+            issues.append({"type": "no_label", "filter": f,
+                           "msg": "Acts on mail with no reason-label — you won't know why it was filed/trashed."})
+        if f.get("shouldMarkAsRead") == "true" and len(crit) < MIN_FIELDS_FOR_READ:
+            issues.append({"type": "read_low_confidence", "filter": f,
+                           "msg": "Marks as read on a single criterion — silent and unrecoverable. "
+                                  "Add a second criterion, or trash instead."})
+        fv = (f.get("from") or "").lower()
+        if fv:
+            seen_from.setdefault(fv, []).append(i)
+        if label:
+            labels[label] = labels.get(label, 0) + 1
+    dupes = {v: idxs for v, idxs in seen_from.items() if len(idxs) > 1}
+    return {"count": len(filters), "issues": issues,
+            "duplicate_senders": dupes, "labels": labels}
 
 
 def parse_gmail_xml(xml_bytes: bytes) -> list[dict]:

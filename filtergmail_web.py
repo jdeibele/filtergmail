@@ -7,8 +7,10 @@ import sqlite3
 
 from flask import Flask, g, jsonify, render_template, request, Response
 
-from gmail_filter import MATCHING_FIELDS, build_filters, generate_gmail_xml
+from gmail_filter import (MATCHING_FIELDS, build_filters, generate_gmail_xml,
+                          audit_filters, parse_gmail_xml)
 import gmail_paste
+import starter_filters
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
@@ -150,6 +152,29 @@ def parse():
     except Exception:
         return jsonify({"error": "Could not parse that — paste the details block from Gmail."}), 400
     return jsonify(result)
+
+
+@app.route("/api/starter")
+def api_starter():
+    """Curated starter-filter library (Bills/Banking/Shopping/Travel/Social) for the
+    one-click 'senders everyone has' on-ramp. Read-only catalog for the UI."""
+    return jsonify(starter_filters.starter_catalog())
+
+
+@app.route("/analyze", methods=["POST"])
+def analyze_existing():
+    """'Bring your existing filters': accept a pasted/exported Gmail mailFilters.xml and
+    return a safety + hygiene audit (missing reason-labels, silent mark-as-read on one
+    field, duplicate senders, label taxonomy). Read-only — nothing stored."""
+    data = request.get_json(silent=True)
+    xml = (data or {}).get("xml", "") if isinstance(data, dict) else ""
+    if not isinstance(xml, str) or not xml.strip():
+        return jsonify({"error": "Paste your exported Gmail filters XML (Settings → Filters → Export)."}), 400
+    try:
+        filters = parse_gmail_xml(xml.encode("utf-8"))
+    except Exception:
+        return jsonify({"error": "That doesn't look like a Gmail filters export."}), 400
+    return jsonify(audit_filters(filters))
 
 
 @app.route("/api/patterns")
