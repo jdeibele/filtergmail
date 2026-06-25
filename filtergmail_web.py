@@ -4,7 +4,11 @@
 
 import os
 import re
+import secrets
+import smtplib
 import sqlite3
+import ssl
+from email.message import EmailMessage
 
 from flask import Flask, g, jsonify, render_template, request, Response
 
@@ -33,6 +37,43 @@ TAGLINE = os.environ.get("FILTERGMAIL_TAGLINE", "Control your inbox")
 # Corrections inbox for the "Roll Your Own" page. NOTE: this address must actually receive
 # mail before launch (domain MX / forwarder), or the CTA bounces.
 CORRECTIONS_EMAIL = os.environ.get("FILTERGMAIL_CORRECTIONS_EMAIL", "corrections@filtergmail.com")
+
+# Transactional email over generic SMTP — works with Resend SMTP (smtp.resend.com, user
+# 'resend', pass = API key), or Gmail, SES, etc. Verification + future account mail go through
+# send_email(); the provider is just which creds land in the env. Until they're set, send_email
+# no-ops (the flow still records interest; nothing is emailed).
+SMTP_HOST = os.environ.get("SMTP_HOST")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER")
+SMTP_PASS = os.environ.get("SMTP_PASS")
+MAIL_FROM = os.environ.get("MAIL_FROM", f"{BRAND} <no-reply@filtergmail.com>")
+SITE_URL = os.environ.get("FILTERGMAIL_URL", "https://filtergmail.com").rstrip("/")
+
+
+def send_email(to, subject, body):
+    """Send one transactional email. Returns True on send, False if SMTP isn't configured or
+    the send errors — the caller decides the UX (we don't expose failures to the user)."""
+    if not (SMTP_HOST and SMTP_USER and SMTP_PASS):
+        app.logger.warning("send_email: SMTP not configured; not sending to %s", to)
+        return False
+    msg = EmailMessage()
+    msg["From"], msg["To"], msg["Subject"] = MAIL_FROM, to, subject
+    msg.set_content(body)
+    ctx = ssl.create_default_context()
+    try:
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ctx, timeout=15) as s:
+                s.login(SMTP_USER, SMTP_PASS)
+                s.send_message(msg)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as s:
+                s.starttls(context=ctx)
+                s.login(SMTP_USER, SMTP_PASS)
+                s.send_message(msg)
+        return True
+    except Exception as e:
+        app.logger.error("send_email failed: %s", e)
+        return False
 # Minimum count for a pattern to appear in the community feed. Stage 1 shows
 # everything (>= 1); bump to 3 or 5 once there is meaningful traffic to filter
 # out one-off patterns (see CLAUDE.md "Known issues / tech debt").
@@ -76,6 +117,8 @@ def _migrate(conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT NOT NULL,
             kind TEXT NOT NULL DEFAULT 'advanced',
+            token TEXT,
+            verified_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(email, kind)
         )
@@ -126,17 +169,43 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 @app.route("/interest", methods=["POST"])
 def interest():
-    """Email capture for the 'Advanced — coming if enough people want it' card (and any
-    future waitlist via `kind`). Stores nothing but the address; deduped."""
+    """Email capture for the 'Advanced — coming if enough people want it' card (and any future
+    waitlist via `kind`). Double opt-in: stores the address with a fresh token and emails a
+    confirm link; the count that matters is verified rows. Re-submitting re-issues the link."""
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()[:200]
     kind = (data.get("kind") or "advanced").strip().lower()[:40] or "advanced"
     if not _EMAIL_RE.match(email):
         return jsonify({"error": "Please enter a valid email."}), 400
+    token = secrets.token_urlsafe(24)
     db = get_db()
-    db.execute("INSERT OR IGNORE INTO interest (email, kind) VALUES (?, ?)", (email, kind))
+    db.execute(
+        "INSERT INTO interest (email, kind, token) VALUES (?, ?, ?) "
+        "ON CONFLICT(email, kind) DO UPDATE SET token = excluded.token",
+        (email, kind, token))
     db.commit()
-    return jsonify({"ok": True})
+    sent = send_email(
+        email, f"Confirm your email — {BRAND}",
+        f"Thanks for your interest in the advanced version of {BRAND}.\n\n"
+        f"Confirm your email so we can let you know when it's ready:\n"
+        f"{SITE_URL}/verify/{token}\n\n"
+        f"If you didn't ask for this, just ignore this message.\n")
+    return jsonify({"ok": True, "sent": sent})
+
+
+@app.route("/verify/<token>")
+def verify(token):
+    """Confirm-your-email landing for the double opt-in link."""
+    db = get_db()
+    row = db.execute("SELECT id, email, verified_at FROM interest WHERE token = ?",
+                     (token[:64],)).fetchone()
+    if not row:
+        return render_template("verify.html", brand=BRAND, ok=False), 404
+    if not row["verified_at"]:
+        db.execute("UPDATE interest SET verified_at = CURRENT_TIMESTAMP, token = NULL WHERE id = ?",
+                   (row["id"],))
+        db.commit()
+    return render_template("verify.html", brand=BRAND, ok=True, email=row["email"])
 
 
 def _rows_to_filters(rows):
