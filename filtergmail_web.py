@@ -8,6 +8,7 @@ import sqlite3
 from flask import Flask, g, jsonify, render_template, request, Response
 
 from gmail_filter import MATCHING_FIELDS, build_filters, generate_gmail_xml
+import gmail_paste
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
@@ -130,6 +131,25 @@ def download():
         mimetype="application/xml",
         headers={"Content-Disposition": "attachment; filename=gmail_filters.xml"},
     )
+
+
+@app.route("/parse", methods=["POST"])
+def parse():
+    """Paste-the-Gmail-details → a suggested safe filter. Backend for the (still to be
+    designed) paste box. Body: JSON {"text": "<pasted details>"}. Returns the analysis:
+    {kind, filter, reason, warnings, alternatives, evidence}. No account access, no storage —
+    pure text in, suggestion out."""
+    data = request.get_json(silent=True)
+    text = (data or {}).get("text", "") if isinstance(data, dict) else ""
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({"error": "Paste the Gmail message details (the from/subject/mailed-by block)."}), 400
+    if len(text) > 20000:
+        return jsonify({"error": "Input too large."}), 400
+    try:
+        result = gmail_paste.analyze(text)
+    except Exception:
+        return jsonify({"error": "Could not parse that — paste the details block from Gmail."}), 400
+    return jsonify(result)
 
 
 @app.route("/api/patterns")
