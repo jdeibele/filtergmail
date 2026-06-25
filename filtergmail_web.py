@@ -27,6 +27,9 @@ MAX_FIELD_LEN = 200
 # rename if/when a cease-and-desist arrives.
 BRAND = os.environ.get("FILTERGMAIL_BRAND", "filtergmail.com")
 TAGLINE = os.environ.get("FILTERGMAIL_TAGLINE", "Control your inbox")
+# Corrections inbox for the "Roll Your Own" page. NOTE: this address must actually receive
+# mail before launch (domain MX / forwarder), or the CTA bounces.
+CORRECTIONS_EMAIL = os.environ.get("FILTERGMAIL_CORRECTIONS_EMAIL", "corrections@filtergmail.com")
 # Minimum count for a pattern to appear in the community feed. Stage 1 shows
 # everything (>= 1); bump to 3 or 5 once there is meaningful traffic to filter
 # out one-off patterns (see CLAUDE.md "Known issues / tech debt").
@@ -153,6 +156,14 @@ def parse():
     except Exception:
         return jsonify({"error": "Could not parse that — paste the details block from Gmail."}), 400
     return jsonify(result)
+
+
+@app.route("/roll-your-own")
+def roll_your_own():
+    """DIY / how-Gmail-filters-actually-work page for the power crowd — XML, the {} trick,
+    the ~500 cap, the Advanced Protection note, editors, and a corrections email."""
+    return render_template("roll_your_own.html", brand=BRAND, tagline=TAGLINE,
+                           corrections_email=CORRECTIONS_EMAIL)
 
 
 @app.route("/api/starter")

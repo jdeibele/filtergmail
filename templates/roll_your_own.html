@@ -1,0 +1,87 @@
+<!-- roll_your_own.html — filtergmail.com DIY / "how Gmail filters work" page | v0.1.0 | 2026-06-25 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roll Your Own — {{ brand }}</title>
+<style>
+  :root { --ink:#202124; --muted:#5f6368; --line:#e5e7eb; --accent:#1a73e8; --code:#f8f9fa; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+         color:var(--ink); background:#fff; }
+  .wrap { max-width:720px; margin:0 auto; padding:32px 22px 80px; }
+  a { color:var(--accent); }
+  header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  header .logo { font-weight:700; color:var(--ink); text-decoration:none; }
+  h1 { font-size:26px; margin:24px 0 6px; }
+  h2 { font-size:18px; margin:34px 0 8px; }
+  p, li { color:#3c4043; }
+  .lede { color:var(--muted); font-size:17px; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:8px; padding:14px;
+        overflow:auto; font-size:13px; line-height:1.5; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  .bad { color:#b3261e; } .good { color:#188038; }
+  .callout { background:#f1f6ff; border:1px solid #d3e3fd; border-radius:10px; padding:14px 16px; margin:18px 0; }
+  .back { display:inline-block; margin-bottom:6px; font-size:14px; }
+  footer { margin-top:48px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a class="logo" href="/">{{ brand }}</a></header>
+  <a class="back" href="/">← Back to the filter builder</a>
+
+  <h1>Roll Your Own</h1>
+  <p class="lede">You don't need this page. {{ brand }} writes the filter file for you — just download
+    and import. But if you're the type who wants to see how the sausage is made (or hand-edit it),
+    here's how Gmail filters actually work.</p>
+
+  <h2>1. The file is XML</h2>
+  <p>Gmail imports and exports filters as an XML file. You never have to read it, but here's what one
+    filter looks like inside:</p>
+  <pre><code>&lt;entry&gt;
+  &lt;category term='filter'/&gt;
+  &lt;apps:property name='from'  value='chase.com'/&gt;
+  &lt;apps:property name='label' value='Banking'/&gt;
+&lt;/entry&gt;</code></pre>
+  <p>To open or tweak it by hand, any text/XML editor works —
+    <a href="https://code.visualstudio.com" target="_blank" rel="noopener">VS&nbsp;Code</a> (Mac/Windows/Linux),
+    <a href="https://notepad-plus-plus.org" target="_blank" rel="noopener">Notepad++</a> (Windows), or paste
+    it into a free in-browser viewer like
+    <a href="https://codebeautify.org/xmlviewer" target="_blank" rel="noopener">CodeBeautify</a> — no install.</p>
+
+  <h2>2. Matching several senders in one rule (the <code>{ }</code> trick)</h2>
+  <p>To file mail from many senders to one label, you might reach for <code>OR</code>. Don't — in Gmail,
+    <code>OR</code> mixed with parentheses <em>leaks</em> out of the field and starts searching the whole
+    email body, which causes wild false positives:</p>
+  <pre><span class="bad">from: ("chase.com") OR ("citi.com")   ← leaks: searches the body for "citi.com"</span>
+<span class="good">from: {"chase.com" "citi.com"}        ← airtight: bound to the From field</span></pre>
+  <p>The brace syntax binds the OR strictly to that field. {{ brand }} generates the brace form for you
+    when you consolidate senders — so you never have to remember this.</p>
+
+  <h2>3. Gmail caps you at ~500 filters</h2>
+  <p>Gmail allows roughly <strong>500 filters</strong> per account (and a separate limit of <strong>20</strong>
+    filters that forward mail). If you're a heavy filterer, that ceiling is real. Google's own advice when you
+    approach it: consolidate with the <code>{ }</code> grouping above, and filter by <strong>domain</strong>
+    (<code>chase.com</code>) rather than individual addresses. One brace rule can hold dozens of senders and
+    counts as a single filter.</p>
+
+  <div class="callout">
+    <strong>Works even with Advanced Protection.</strong> Google's Advanced Protection Program blocks apps —
+    even ones you wrote — from touching your mailbox. So every "connect your Gmail" tool simply doesn't work
+    for those accounts. {{ brand }} never asks for access to your account: filters are built in your browser
+    and you import the file yourself. Nothing to authorize, nothing that can break.
+  </div>
+
+  <h2>Found something we got wrong?</h2>
+  <p>Gmail's filter behavior is under-documented and changes over time. If you know it better than we do —
+    especially if you work on it — please tell us: <a href="mailto:{{ corrections_email }}">{{ corrections_email }}</a>.
+    Corrections welcome and credited.</p>
+
+  <footer>
+    {{ brand }} — {{ tagline }}. Independent tool, not affiliated with Google. Gmail is a trademark of Google&nbsp;LLC.
+  </footer>
+</div>
+</body>
+</html>
