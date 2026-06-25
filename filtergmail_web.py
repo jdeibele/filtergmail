@@ -143,12 +143,13 @@ def parse():
     pure text in, suggestion out."""
     data = request.get_json(silent=True)
     text = (data or {}).get("text", "") if isinstance(data, dict) else ""
+    user_email = (data or {}).get("user_email") if isinstance(data, dict) else None
     if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "Paste the Gmail message details (the from/subject/mailed-by block)."}), 400
     if len(text) > 20000:
         return jsonify({"error": "Input too large."}), 400
     try:
-        result = gmail_paste.analyze(text)
+        result = gmail_paste.analyze(text, user_email=user_email if isinstance(user_email, str) else None)
     except Exception:
         return jsonify({"error": "Could not parse that — paste the details block from Gmail."}), 400
     return jsonify(result)

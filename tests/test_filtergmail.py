@@ -107,6 +107,49 @@ def test_generated_xml_roundtrips():
     assert all("label" in f for f in back), "every filter must keep its reason-label"
 
 
+# ── input classification + fragments ─────────────────────────────────────────────
+
+def test_classify_input():
+    assert gp.classify_input("from: a <x@y.com>\nsubject: hi\nmailed-by: y.com") == "block"
+    assert gp.classify_input("spammer@example.com") == "email"
+    assert gp.classify_input("you have won a prize") == "keyword"
+
+def test_bare_email_fragment_is_sender_keep():
+    a = gp.analyze("ebill@conservicemail.com")
+    assert a["input_kind"] == "email" and a["kind"] == "sender"
+    assert a["filter"]["from"] == "ebill@conservicemail.com"
+    assert "shouldTrash" not in a["filter"] and "shouldArchive" not in a["filter"]  # default keep
+
+def test_bare_keyword_fragment_is_subject():
+    a = gp.analyze("has been blocked")
+    assert a["input_kind"] == "keyword" and a["kind"] == "subject"
+    assert "blocked" in a["filter"]["subject"]
+
+
+# ── free-mail safety + progressive identity ──────────────────────────────────────
+
+def test_freemail_sender_never_becomes_domain_filter():
+    block = "from: Scammer <evil@gmail.com>\nsubject: You have won a Prize\nmailed-by: gmail.com"
+    a = gp.analyze(block)
+    assert a["kind"] == "subject"          # NEVER from:gmail.com
+    assert "from" not in a["filter"]
+    assert a["ask_owner"] is True          # unknown user + gmail From → ask "is this yours?"
+
+def test_bare_gmail_address_asks_owner():
+    assert gp.analyze("someone@gmail.com")["ask_owner"] is True
+    assert gp.analyze("ebill@conservicemail.com")["ask_owner"] is False
+
+def test_known_user_email_scrubs_and_no_ask():
+    block = "from: jdeibele <jdeibele@gmail.com>\nsubject: jdeibele your account locked\nmailed-by: gmail.com"
+    a = gp.analyze(block, user_email="jdeibele@gmail.com")
+    assert a["kind"] == "subject" and a["ask_owner"] is False
+    assert "jdeibele" not in a["filter"]["subject"]   # own name scrubbed from the phrase
+
+def test_own_address_fragment_not_filtered():
+    a = gp.analyze("jdeibele@gmail.com", user_email="jdeibele@gmail.com")
+    assert a["filter"] is None             # never filter your own mail
+
+
 # ── 'keep' action (starter filters: label only, stays in inbox) ──────────────────
 
 def test_keep_action_is_label_only():

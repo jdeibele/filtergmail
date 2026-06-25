@@ -34,6 +34,20 @@ from gmail_filter import build_safe_filter
 LABEL_SENDER = "Junk mail/Sender Blocked"
 LABEL_SUBJECT = "Junk mail/Subject Spam"
 
+# Shared / free-mail domains. We must NEVER reduce one of these to a `from: <domain>`
+# rule — `from: gmail.com` would catch every Gmail sender (and possibly the user's own
+# mail, since spam often spoofs the recipient's own address as the From). For a freemail
+# sender we filter the FULL address if one was given, else fall back to the subject.
+# (We assume a non-gmail address is NOT the user's; Google Workspace custom domains are
+# out of scope for now. The first gmail address we see, the UI asks "is this yours?".)
+FREEMAIL = {
+    "gmail.com", "googlemail.com", "yahoo.com", "ymail.com", "outlook.com",
+    "hotmail.com", "live.com", "msn.com", "aol.com", "icloud.com", "me.com",
+    "mac.com", "proton.me", "protonmail.com", "gmx.com", "zoho.com",
+}
+
+_BLOCK_RE = re.compile(r"(?im)^\s*(from|subject|mailed-by|signed-by|sent by|to)\s*:")
+
 # Public-suffix-LIGHT: enough multi-part suffixes to get the registrable domain right
 # for common cases. A full implementation would use the PSL (tldextract).
 _MULTI_SUFFIX = {
@@ -161,64 +175,116 @@ def subject_phrase_candidates(subject, recipient_name=None, max_candidates=4):
     return out[:max_candidates]
 
 
-def analyze(text):
-    """Decide the best filter for a pasted Gmail details block.
+def classify_input(text):
+    """What did the user paste? 'block' (a Gmail details block), 'email' (a bare
+    address — 'what do you want to do with mail from this address?'), or 'keyword'
+    (a subject/phrase fragment)."""
+    t = (text or "").strip()
+    if not t:
+        return "empty"
+    if _BLOCK_RE.search(t):
+        return "block"
+    if "\n" not in t and len(t.split()) <= 3:
+        m = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", t)
+        if m:
+            return "email"
+    return "keyword"
 
-    Returns a dict:
-      kind:        'sender' | 'subject'
-      filter:      the Gmail filter dict (from build_safe_filter)
-      warnings:    list[str]
-      reason:      human explanation of the decision
-      evidence:    parsed domains/fields used
-      alternatives: other subject-phrase candidates (subject kind only)
+
+def _result(kind, filt, warnings, reason, evidence=None, alternatives=None,
+            ask_owner=False, input_kind="block"):
+    return {"kind": kind, "filter": filt, "warnings": warnings, "reason": reason,
+            "evidence": evidence or {}, "alternatives": alternatives or [],
+            "ask_owner": ask_owner, "input_kind": input_kind}
+
+
+def analyze(text, user_email=None):
+    """Decide the best filter for pasted Gmail content — a full details block OR a bare
+    email address OR a subject fragment. Optional `user_email` (the user's own address,
+    captured progressively) is scrubbed from subjects and flags spoofs.
+
+    Returns a dict: kind ('sender'|'subject'), filter (build_safe_filter dict or None),
+    warnings, reason, evidence, alternatives, ask_owner (UI should ask "is this gmail
+    address yours?"), input_kind.
     """
+    user_email = (user_email or "").strip().lower() or None
+    kind_in = classify_input(text)
+
+    # ── bare email address: "what do you want to do with mail from this address?" ──
+    if kind_in == "email":
+        addr = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", text).group(0).lower()
+        dom = addr.split("@", 1)[1]
+        reg = registrable_domain(dom)
+        ask = user_email is None and reg in ("gmail.com", "googlemail.com")
+        if user_email and addr == user_email:
+            return _result("subject", None, [],
+                           "That's your own address — we won't filter your own mail.",
+                           {"address": addr}, ask_owner=False, input_kind="email")
+        # A full address is specific enough to filter even on a freemail domain
+        # (from: john@gmail.com matches only John — unlike the bare domain).
+        flt, warns = build_safe_filter({"from": addr}, LABEL_SENDER, action="keep")
+        return _result("sender", flt, warns,
+                       f"Mail from {addr} — choose what to do with it (kept + labelled by default).",
+                       {"address": addr, "registrable": reg}, ask_owner=ask, input_kind="email")
+
+    # ── bare keyword / subject fragment ──
+    if kind_in == "keyword":
+        cands = subject_phrase_candidates(text, recipient_name=_local_part(user_email))
+        if not cands:
+            return _result("subject", None, [], "Nothing usable to match on.", input_kind="keyword")
+        flt, warns = build_safe_filter({"subject": cands[0]}, LABEL_SUBJECT, action="trash")
+        return _result("subject", flt, warns,
+                       f"Filter messages whose subject contains “{cands[0]}”.",
+                       {"subject": text}, alternatives=cands[1:], input_kind="keyword")
+
+    # ── full Gmail details block ──
     f = parse_details(text)
     from_line = f.get("from", "")
-    recipient = None
-    to_dom = _email_domain(f.get("to", ""))
-    # recipient display: the local-part of the To address, used to scrub the subject
     to_email = _EMAIL_RE.search(f.get("to", "") or "")
-    if to_email:
-        recipient = re.split(r"[@<]", to_email.group(0))[0]
+    recipient = re.split(r"[@<]", to_email.group(0))[0] if to_email else _local_part(user_email)
 
     from_dom = _email_domain(from_line)
+    from_addr = (_EMAIL_RE.search(from_line).group(0).lower() if _EMAIL_RE.search(from_line) else None)
     via_dom = (_VIA_RE.search(from_line).group(1).lower() if _VIA_RE.search(from_line) else None)
     mailed = _bare_domain(f.get("mailed-by", ""))
     signed = _bare_domain(f.get("signed-by", ""))
-
     from_reg = registrable_domain(from_dom)
     auth_reg = registrable_domain(mailed or signed or via_dom)
     subject = f.get("subject", "")
+    evidence = {"from_domain": from_dom, "from_registrable": from_reg,
+                "authenticated_registrable": auth_reg, "mailed_by": mailed,
+                "signed_by": signed, "via": via_dom, "subject": subject}
 
-    evidence = {
-        "from_domain": from_dom, "from_registrable": from_reg,
-        "authenticated_registrable": auth_reg,
-        "mailed_by": mailed, "signed_by": signed, "via": via_dom,
-        "subject": subject,
-    }
+    spoof = bool(user_email and from_addr == user_email)
+    # Should the UI ask whether a seen gmail address is the user's? Only when we don't
+    # already know their address and a gmail address showed up as the From.
+    ask = user_email is None and from_reg in ("gmail.com", "googlemail.com")
 
-    # DECISION. A `from:` filter is only durable if the From domain is a STABLE,
-    # nameable sender. Disposable/gibberish From domains rotate every send, so the
-    # subject is the only thing that holds. (from != authenticated is recorded as a
-    # forgery note, but is NOT the switch — legit ESP mail also has from != mailed-by.)
-    if from_reg and not looks_disposable(from_reg):
+    # SENDER filter is durable only for a STABLE, NON-freemail domain. A freemail From
+    # (gmail.com etc.) must never become `from: <domain>` (catches everyone / maybe the
+    # user) — and a disposable/gibberish domain rotates every send. Both fall to subject.
+    if from_reg and from_reg not in FREEMAIL and not looks_disposable(from_reg):
         flt, warns = build_safe_filter({"from": from_reg}, LABEL_SENDER, action="trash")
         note = f"Stable sender domain '{from_reg}' — one from: rule catches its rotating subdomains."
         if auth_reg and auth_reg != from_reg:
             note += f" (Heads-up: authenticated sender is '{auth_reg}', not '{from_reg}'.)"
-        return {"kind": "sender", "filter": flt, "warnings": warns,
-                "reason": note, "evidence": evidence, "alternatives": []}
+        return _result("sender", flt, warns, note, evidence, ask_owner=ask)
 
-    # Sender is disposable/forged/absent -> filter the subject.
     cands = subject_phrase_candidates(subject, recipient_name=recipient)
     if not cands:
-        return {"kind": "subject", "filter": None, "warnings": [],
-                "reason": "Sender looks disposable and no usable subject phrase was found — "
-                          "paste the subject line (and a bit of body) for a subject rule.",
-                "evidence": evidence, "alternatives": []}
+        return _result("subject", None, [],
+                       "Sender can't be filtered safely and no usable subject phrase was found — "
+                       "paste the subject line for a subject rule.", evidence, ask_owner=ask)
     flt, warns = build_safe_filter({"subject": cands[0]}, LABEL_SUBJECT, action="trash")
-    why = (f"From domain '{from_reg or '(none)'}' looks disposable/rotating"
-           + (f" and disagrees with the authenticated sender '{auth_reg}'" if auth_reg and auth_reg != from_reg else "")
-           + " — a from: rule won't hold, so filter the durable subject phrase instead.")
-    return {"kind": "subject", "filter": flt, "warnings": warns, "reason": why,
-            "evidence": evidence, "alternatives": cands[1:]}
+    if from_reg in FREEMAIL:
+        why = (f"From is a {from_reg} address" + (" (and spoofs your own!)" if spoof else "")
+               + " — a from: rule would catch everyone, so we filter the durable subject phrase.")
+    else:
+        why = (f"From domain '{from_reg or '(none)'}' looks disposable/rotating"
+               + (f", disagreeing with authenticated '{auth_reg}'" if auth_reg and auth_reg != from_reg else "")
+               + " — a from: rule won't hold, so we filter the durable subject phrase.")
+    return _result("subject", flt, warns, why, evidence, alternatives=cands[1:], ask_owner=ask)
+
+
+def _local_part(email):
+    return email.split("@", 1)[0] if email and "@" in email else None
