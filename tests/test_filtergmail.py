@@ -198,6 +198,58 @@ def test_build_starter_filters_uses_safe_actions():
     assert fb["label"] == "Social" and fb["shouldArchive"] == "true"
 
 
+# ── {} consolidation (power-user export) ─────────────────────────────────────────
+
+def test_consolidate_groups_same_label_action():
+    from gmail_filter import consolidate_by_label
+    filters = [
+        {"from": "chase.com", "label": "Banking", "shouldArchive": "true"},
+        {"from": "citi.com", "label": "Banking", "shouldArchive": "true"},
+        {"from": "amazon.com", "label": "Shopping", "shouldArchive": "true"},  # diff label
+        {"subject": "win big", "label": "Junk", "shouldTrash": "true"},        # not single-from
+    ]
+    out = consolidate_by_label(filters)
+    banking = [f for f in out if f.get("label") == "Banking"]
+    assert len(banking) == 1
+    assert banking[0]["from"] == '{"chase.com" "citi.com"}'      # airtight brace OR
+    assert any(f.get("subject") == "win big" for f in out)        # subject passed through
+    assert any(f.get("from") == "amazon.com" for f in out)        # lone sender stays plain
+
+
+# ── format codecs (YAML/CSV/JSON) ────────────────────────────────────────────────
+
+import formats as fmt
+
+_FILTERS = [
+    {"from": "chase.com", "label": "Banking"},
+    {"subject": "has been blocked", "label": "Junk mail/Subject Spam", "shouldTrash": "true"},
+]
+
+def test_json_roundtrip():
+    back = fmt.from_json(fmt.to_json(_FILTERS))
+    assert back[0]["from"] == "chase.com" and back[0]["label"] == "Banking"
+    assert back[1]["shouldTrash"] == "true"
+
+def test_csv_roundtrip():
+    back = fmt.from_csv(fmt.to_csv(_FILTERS))
+    assert any(f.get("from") == "chase.com" for f in back)
+    spam = next(f for f in back if f.get("subject") == "has been blocked")
+    assert spam["shouldTrash"] == "true" and spam["label"] == "Junk mail/Subject Spam"
+
+def test_csv_drops_unlabelled_rows():
+    csv_text = "from,subject,hasTheWord,doesNotHaveTheWord,label,action\nx.com,,,,,trash\n"
+    assert fmt.from_csv(csv_text) == []   # no label -> dropped (safety rule 1)
+
+def test_yaml_roundtrip_if_available():
+    try:
+        import yaml  # noqa
+    except ImportError:
+        return  # PyYAML not installed locally; CI/deploy has it
+    back = fmt.from_yaml(fmt.to_yaml(_FILTERS))
+    assert back[0]["from"] == "chase.com"
+    assert back[1]["shouldTrash"] == "true"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

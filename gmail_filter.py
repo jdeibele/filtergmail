@@ -172,6 +172,37 @@ _DOCTYPE_RE = re.compile(rb"<!DOCTYPE", re.IGNORECASE)
 _ENTITY_RE = re.compile(rb"<!ENTITY", re.IGNORECASE)
 
 
+def consolidate_by_label(filters: list[dict]) -> list[dict]:
+    """Power-user export option: merge single-`from` filters that share the SAME label and
+    SAME action into one filter using Gmail's airtight brace OR-grouping —
+    `from: '{"a.com" "b.com"}'`. Cuts filter count to stay under Gmail's ~500 cap (Google's
+    own advice). Filters with a subject/other or multiple criteria pass through unchanged.
+    Per-sender remains the default; callers opt into this. Returns a new list."""
+    groups, passthrough = {}, []
+    for f in filters:
+        crit = [k for k in f if k in MATCHING_FIELDS]
+        fv = f.get("from", "")
+        if crit == ["from"] and fv and "{" not in fv:
+            props = tuple(sorted((k, f[k]) for k in f if k.startswith("should")))
+            g = groups.setdefault((f.get("label", ""), props),
+                                  {"froms": [], "props": props, "label": f.get("label", "")})
+            if fv not in g["froms"]:
+                g["froms"].append(fv)
+        else:
+            passthrough.append(f)
+    out = []
+    for g in groups.values():
+        froms = g["froms"]
+        merged = {"from": froms[0] if len(froms) == 1
+                  else "{" + " ".join('"%s"' % v for v in froms) + "}"}
+        if g["label"]:
+            merged["label"] = g["label"]
+        merged.update(dict(g["props"]))
+        out.append(merged)
+    out.extend(passthrough)
+    return out
+
+
 def audit_filters(filters: list[dict]) -> dict:
     """Audit an existing parsed filter list against the safety model + light hygiene —
     backs the 'bring your existing filters' (/analyze) feature. Returns a report dict:
