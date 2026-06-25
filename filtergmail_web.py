@@ -3,6 +3,7 @@
 # Stage 1: Filter table + community inspiration feed
 
 import os
+import re
 import sqlite3
 
 from flask import Flask, g, jsonify, render_template, request, Response
@@ -66,6 +67,19 @@ def _migrate(conn):
             UNIQUE(pattern, label, field)
         )
     """)
+    # Demand signal for the (dropped-for-now) Advanced version: the front door's
+    # "Advanced — coming if enough people want it" card collects emails here. When the
+    # count is convincing, that's the signal to ship the full builder. kind lets one table
+    # serve other future waitlists too.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS interest (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'advanced',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(email, kind)
+        )
+    """)
     conn.commit()
 
 
@@ -105,6 +119,24 @@ def index():
     top = _top_patterns()
     return render_template("index.html", top_patterns=top, max_rows=FREE_TIER_LIMIT,
                            brand=BRAND, tagline=TAGLINE)
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@app.route("/interest", methods=["POST"])
+def interest():
+    """Email capture for the 'Advanced — coming if enough people want it' card (and any
+    future waitlist via `kind`). Stores nothing but the address; deduped."""
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()[:200]
+    kind = (data.get("kind") or "advanced").strip().lower()[:40] or "advanced"
+    if not _EMAIL_RE.match(email):
+        return jsonify({"error": "Please enter a valid email."}), 400
+    db = get_db()
+    db.execute("INSERT OR IGNORE INTO interest (email, kind) VALUES (?, ?)", (email, kind))
+    db.commit()
+    return jsonify({"ok": True})
 
 
 def _rows_to_filters(rows):
