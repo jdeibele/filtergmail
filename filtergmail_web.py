@@ -34,6 +34,9 @@ MAX_FIELD_LEN = 200
 # rename if/when a cease-and-desist arrives.
 BRAND = os.environ.get("FILTERGMAIL_BRAND", "filtergmail.com")
 TAGLINE = os.environ.get("FILTERGMAIL_TAGLINE", "Control your inbox")
+# Display wordmark (the brand NAME, not the domain) — header, download filename, feed title.
+# Swappable for the trademark rename: one env change flips the whole front door.
+WORDMARK = os.environ.get("FILTERGMAIL_WORDMARK", "filtergmail")
 # Corrections inbox for the "Roll Your Own" page. NOTE: this address must actually receive
 # mail before launch (domain MX / forwarder), or the CTA bounces.
 CORRECTIONS_EMAIL = os.environ.get("FILTERGMAIL_CORRECTIONS_EMAIL", "corrections@filtergmail.com")
@@ -159,9 +162,10 @@ def _top_patterns(limit=40):
 
 @app.route("/")
 def index():
-    top = _top_patterns()
-    return render_template("index.html", top_patterns=top, max_rows=FREE_TIER_LIMIT,
-                           brand=BRAND, tagline=TAGLINE)
+    # The front door (Simple view) is fully client-side; only the Advanced gauge POSTs to
+    # /interest. The old techie builder is gated behind the email gauge — its backend
+    # (/parse, /api/starter, /download, /analyze) stays, just unlinked from the UI.
+    return render_template("index.html", brand=WORDMARK)
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

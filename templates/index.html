@@ -1,630 +1,290 @@
-<!-- index.html — filtergmail.com main page | v1.0.0 | 2026-06-11 -->
+<!-- index.html — filtergmail.com front door (Simple view) | v2.0.0 | 2026-06-25
+     Ported from Claude Design handoff (design_handoff_filtergmail). High-fidelity; all
+     parsing / filter-file generation / safety guards run client-side. Only the Advanced
+     "Notify me" hits the server (POST /interest). Wordmark is {{ brand }} (swappable). -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ brand }} — {{ tagline }}</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ brand }} — Tidy up your Gmail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #f1f3f4;
-  color: #202124;
-  min-height: 100vh;
-}
-
-header {
-  background: #fff;
-  border-bottom: 1px solid #dadce0;
-  padding: 0 32px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-}
-
-.logo svg { width: 32px; height: 32px; flex-shrink: 0; }
-
-.logo-name {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #1a73e8;
-  letter-spacing: -0.3px;
-}
-
-.header-tagline {
-  font-size: 0.9rem;
-  color: #5f6368;
-  border-left: 1px solid #dadce0;
-  padding-left: 12px;
-  margin-left: 4px;
-}
-
-main {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 32px 24px;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 24px;
-  align-items: start;
-}
-
-@media (max-width: 800px) {
-  .layout { grid-template-columns: 1fr; }
-}
-
-.card {
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid #dadce0;
-  padding: 28px;
-}
-
-.card h2 {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #202124;
-  margin-bottom: 6px;
-}
-
-.card .subtitle {
-  font-size: 0.875rem;
-  color: #5f6368;
-  margin-bottom: 24px;
-  line-height: 1.5;
-}
-
-/* Filter table */
-.filter-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 16px;
-}
-
-.filter-table th {
-  text-align: left;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #5f6368;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 0 8px 10px;
-}
-
-.filter-table th:last-child { width: 36px; }
-
-.filter-row td {
-  padding: 5px 8px 5px 0;
-  vertical-align: middle;
-}
-
-.filter-row td:first-child { padding-left: 0; }
-
-.filter-row input {
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px solid #dadce0;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  color: #202124;
-  background: #fff;
-  transition: border-color 0.15s;
-  outline: none;
-}
-
-.filter-row input:focus {
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
-}
-
-.filter-row input::placeholder { color: #bdc1c6; }
-
-.remove-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #bdc1c6;
-  padding: 6px;
-  border-radius: 4px;
-  line-height: 1;
-  font-size: 1.1rem;
-  transition: color 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.remove-btn:hover { color: #d93025; }
-
-.table-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.add-btn {
-  background: none;
-  border: 1px solid #dadce0;
-  border-radius: 6px;
-  padding: 7px 14px;
-  font-size: 0.875rem;
-  color: #1a73e8;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  font-weight: 500;
-}
-
-.add-btn:hover:not(:disabled) { background: #f0f4ff; border-color: #1a73e8; }
-.add-btn:disabled { color: #bdc1c6; border-color: #f1f3f4; cursor: not-allowed; }
-
-.row-counter {
-  font-size: 0.8rem;
-  color: #5f6368;
-}
-
-.row-counter .count { font-weight: 600; color: #202124; }
-
-.download-btn {
-  width: 100%;
-  background: #1a73e8;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 12px 20px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-  letter-spacing: 0.1px;
-}
-
-.download-btn:hover:not(:disabled) { background: #1557b0; }
-.download-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-/* Instructions */
-.instructions {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid #f1f3f4;
-}
-
-.instructions h3 {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #5f6368;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
-}
-
-.instructions ol {
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.instructions li {
-  font-size: 0.875rem;
-  color: #3c4043;
-  line-height: 1.5;
-}
-
-.instructions strong { color: #202124; }
-
-/* Community feed */
-.community h2 { margin-bottom: 6px; }
-
-.community .subtitle { margin-bottom: 16px; }
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-  background: #f1f3f4;
-  border: 1px solid #e8eaed;
-  border-radius: 20px;
-  padding: 5px 12px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  color: #3c4043;
-  line-height: 1.4;
-}
-
-.chip:hover {
-  background: #e8f0fe;
-  border-color: #1a73e8;
-  color: #1a73e8;
-}
-
-.chip .chip-pattern { font-weight: 500; }
-
-.chip .chip-arrow {
-  color: #9aa0a6;
-  margin: 0 4px;
-  font-size: 0.7rem;
-}
-
-.chip .chip-label { color: #5f6368; }
-
-.chip:hover .chip-arrow,
-.chip:hover .chip-label { color: #1a73e8; }
-
-.chip .chip-count {
-  margin-left: 6px;
-  background: #e8eaed;
-  border-radius: 10px;
-  padding: 1px 6px;
-  font-size: 0.7rem;
-  color: #80868b;
-}
-
-.chip:hover .chip-count { background: #c5d7f7; color: #1557b0; }
-
-.empty-feed {
-  font-size: 0.875rem;
-  color: #9aa0a6;
-  font-style: italic;
-}
-
-.added-notice {
-  display: none;
-  margin-top: 12px;
-  font-size: 0.8rem;
-  color: #34a853;
-  font-weight: 500;
-}
+  *{box-sizing:border-box}
+  body{margin:0;background:#f3efe8}
+  textarea,input,button{font-family:inherit}
+  .bric{font-family:'Bricolage Grotesque',sans-serif}
+  .mono{font-family:'IBM Plex Mono',monospace}
 </style>
 </head>
 <body>
+<div style="--accent:#2f7d5b;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#2a2723;min-height:100vh;background:#faf8f4;-webkit-font-smoothing:antialiased">
+  <div style="max-width:520px;margin:0 auto;padding:0 18px 56px">
 
-<header>
-  <a class="logo" href="/">
-    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="32" height="32" rx="6" fill="#1a73e8"/>
-      <path d="M6 11l10 7.5L26 11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-      <rect x="6" y="11" width="20" height="13" rx="1" stroke="#fff" stroke-width="1.8" fill="none"/>
-    </svg>
-    <span class="logo-name">{{ brand }}</span>
-  </a>
-  <span class="header-tagline">{{ tagline }}</span>
-</header>
+    <!-- header -->
+    <header style="display:flex;align-items:center;gap:9px;padding:18px 0">
+      <span class="bric" style="display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;font-size:15px">↯</span>
+      <span class="bric" style="font-weight:700;font-size:17px;letter-spacing:-.01em">{{ brand }}</span>
+    </header>
 
-<main>
-  <div class="layout">
+    <!-- intro -->
+    <h1 class="bric" style="font-weight:800;font-size:27px;line-height:1.1;letter-spacing:-.02em;margin:14px 0 0;text-wrap:balance">Tidy up your Gmail.</h1>
+    <p style="font-size:15px;line-height:1.5;color:#54504a;margin:9px 0 0;text-wrap:pretty">Delete the junk, label the keepers, download a filter file, and import it into Gmail once. We never sign in or see your mail.</p>
 
-    <!-- Filter builder -->
-    <div class="card">
-      <h2>Build your filters</h2>
-      <p class="subtitle">Two ways in: <strong>paste one annoying email</strong> for a quick filter, or
-        build up a list below and download them all at once — you only import to Gmail <em>once</em>.</p>
+    <!-- DELETE card -->
+    <div style="margin-top:22px;background:#fff;border:1px solid #ece6dc;border-radius:16px;padding:18px">
+      <div class="bric" style="font-weight:700;font-size:16px">Delete the junk</div>
+      <div style="font-size:13px;color:#6b665e;margin:3px 0 12px;line-height:1.4">Paste a sender to block them, or words to block by subject. Caught mail gets labeled and sent to Trash.</div>
+      <textarea id="deleteText" rows="4" placeholder="deals@noreply.example.com&#10;You have won&#10;final notice" class="mono" style="width:100%;font-size:13.5px;line-height:1.7;padding:12px 13px;border:1px solid #e2dccf;border-radius:10px;background:#faf8f3;color:#2a2723;outline:none;resize:vertical"></textarea>
+      <div style="font-size:12px;color:#9a948a;margin-top:9px;display:flex;gap:16px;flex-wrap:wrap">
+        <span><strong style="color:#6b665e">an @address or domain (chase.com)</strong> → “From Spam”</span>
+        <span><strong style="color:#6b665e">other words</strong> → “Subject Spam”</span>
+      </div>
+      <div id="deleteNotice" style="display:none;margin-top:12px;background:#fbf6ea;border:1px solid #f0e4c8;border-radius:10px;padding:11px 13px;font-size:13px;line-height:1.45;color:#6f6450"></div>
+      <div id="deletePreviewWrap" style="display:none;margin-top:14px;border-top:1px solid #efe9df;padding-top:6px">
+        <div id="deletePreview"></div>
+      </div>
+    </div>
 
-      <!-- Quick on-ramp: paste a message → suggested filter -->
-      <div class="paste-box" style="margin:0 0 18px">
-        <textarea id="paste-input" rows="3" style="width:100%;font:inherit;font-size:13.5px;padding:10px 12px;
-          border:1px solid #dadce0;border-radius:8px;resize:vertical"
-          placeholder="Paste a junk email's details here — in Gmail: ⋮ → 'Show original', or just the from/subject lines. We'll suggest a safe filter and add it below."></textarea>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
-          <button class="add-btn" id="paste-btn" type="button">Suggest a filter →</button>
-          <span class="paste-msg" id="paste-msg" style="font-size:12.5px;color:#5f6368"></span>
+    <!-- LABEL card -->
+    <div style="margin-top:16px;background:#fff;border:1px solid #ece6dc;border-radius:16px;padding:18px">
+      <div class="bric" style="font-weight:700;font-size:16px">Label &amp; keep</div>
+      <div style="font-size:13px;color:#6b665e;margin:3px 0 14px;line-height:1.4">Mail you want to keep but organize — like everything from your bank. It stays in your inbox and just gets your label.</div>
+      <div id="labelGroups" style="display:flex;flex-direction:column;gap:14px"></div>
+      <button type="button" id="addGroup" style="margin-top:12px;width:100%;font-size:13px;font-weight:600;padding:10px;border-radius:10px;border:1.5px dashed #d8d2c6;background:#fff;color:#6b665e;cursor:pointer">+ Add another label</button>
+      <div style="font-size:11.5px;color:#9a948a;margin-top:12px;line-height:1.45">No need to create these labels in Gmail first — it makes each one automatically when you import the file.</div>
+    </div>
+
+    <!-- download -->
+    <button type="button" id="downloadBtn"><span id="downloadIcon" style="font-size:18px">↓</span><span id="downloadLabel">Download filter file</span></button>
+    <div id="fileName" class="mono" style="text-align:center;font-size:11.5px;color:#9a948a;margin-top:9px"></div>
+
+    <!-- what it does -->
+    <div style="margin-top:22px;background:color-mix(in srgb, var(--accent) 7%, #fff);border:1px solid color-mix(in srgb, var(--accent) 22%, #fff);border-radius:14px;padding:16px">
+      <div style="font-weight:600;font-size:14px;margin-bottom:11px">What the file does</div>
+      <div style="display:flex;gap:10px;padding-bottom:10px"><span style="flex:none;color:var(--accent);font-weight:800;font-size:13px;line-height:1.5">✓</span><div style="font-size:13.5px;line-height:1.5;color:#3f3b35">Junk you list gets a “From Spam” or “Subject Spam” label and goes to Trash (kept 30 days, just in case).</div></div>
+      <div style="display:flex;gap:10px;padding-bottom:10px"><span style="flex:none;color:var(--accent);font-weight:800;font-size:13px;line-height:1.5">✓</span><div style="font-size:13.5px;line-height:1.5;color:#3f3b35">Mail you label — like everything from your bank — keeps its spot in your inbox and just gets your label too.</div></div>
+      <div style="display:flex;gap:10px"><span style="flex:none;color:var(--accent);font-weight:800;font-size:13px;line-height:1.5">✓</span><div style="font-size:13.5px;line-height:1.5;color:#3f3b35">It all applies to new mail from now on; your existing inbox is never touched.</div></div>
+    </div>
+
+    <!-- import steps -->
+    <div style="margin-top:24px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9a948a;margin-bottom:12px">Import it, once</div>
+      <div style="display:flex;gap:12px;padding-bottom:14px"><span class="bric" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid color-mix(in srgb, var(--accent) 45%, #fff);color:var(--accent);font-weight:800;font-size:12.5px">1</span><div style="font-size:14px;line-height:1.45;color:#3f3b35;padding-top:1px">In the Gmail website, click the gear (⚙) → “See all settings”.</div></div>
+      <div style="display:flex;gap:12px;padding-bottom:14px"><span class="bric" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid color-mix(in srgb, var(--accent) 45%, #fff);color:var(--accent);font-weight:800;font-size:12.5px">2</span><div style="font-size:14px;line-height:1.45;color:#3f3b35;padding-top:1px">Open the “Filters and Blocked Addresses” tab.</div></div>
+      <div style="display:flex;gap:12px;padding-bottom:14px"><span class="bric" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid color-mix(in srgb, var(--accent) 45%, #fff);color:var(--accent);font-weight:800;font-size:12.5px">3</span><div style="font-size:14px;line-height:1.45;color:#3f3b35;padding-top:1px">Scroll down, choose “Import filters,” and pick the file you downloaded.</div></div>
+      <div style="display:flex;gap:12px;padding-bottom:14px"><span class="bric" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid color-mix(in srgb, var(--accent) 45%, #fff);color:var(--accent);font-weight:800;font-size:12.5px">4</span><div style="font-size:14px;line-height:1.45;color:#3f3b35;padding-top:1px">Click “Create filters.” Done — new mail is handled automatically.</div></div>
+      <div style="font-size:12.5px;line-height:1.45;color:#8a847a;background:#f4f1ea;border-radius:10px;padding:11px 13px">Use the Gmail <strong style="color:#6b665e">website</strong>, not the app. On a phone you can open Gmail in Safari and tap “Desktop site,” but it's easier on a computer.</div>
+    </div>
+
+    <!-- advanced interest -->
+    <div style="margin-top:24px;background:#1f2420;border-radius:16px;padding:20px;color:#e9e6df">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8fae9f;margin-bottom:10px">Advanced</div>
+      <p style="font-size:13.5px;line-height:1.55;color:#cfcbc2;margin:0;text-wrap:pretty">We've also built an advanced version — upload and download your filters as CSV, JSON or YAML, combine several fields into one filter, and more. If that sounds useful, leave your email and we'll release it if enough people want it.</p>
+      <div id="advForm">
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <input id="advEmail" type="email" placeholder="you@example.com" class="mono" style="flex:1;min-width:0;font-size:13px;padding:11px 12px;border:1px solid rgba(255,255,255,.16);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;outline:none">
+          <button type="button" id="advSubmit">Notify me</button>
         </div>
+        <div style="font-size:11px;color:#7d8a82;margin-top:9px">We'll only email you about the advanced version — nothing else.</div>
       </div>
-
-      <table class="filter-table">
-        <thead>
-          <tr>
-            <th>Keyword, phrase, or sender</th>
-            <th>Label</th>
-            <th>Do what?</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="filter-rows"></tbody>
-      </table>
-
-      <div class="table-footer">
-        <button class="add-btn" id="add-btn">+ Add row</button>
-        <span class="row-counter"><span class="count" id="row-count">0</span> / {{ max_rows }} filters</span>
+      <div id="advThanks" style="display:none;margin-top:14px;align-items:center;gap:9px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px">
+        <span style="color:#8fae9f;font-weight:800">✓</span>
+        <div style="font-size:13.5px;color:#e9e6df">Thanks — you're on the list. We'll be in touch if it ships.</div>
       </div>
-
-      <div class="dl-controls" style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:14px 0 10px;font-size:13px;color:#5f6368">
-        <label>Format
-          <select id="dl-format" style="font:inherit;padding:4px 6px">
-            <option value="xml">Gmail (XML)</option>
-            <option value="yaml">YAML</option>
-            <option value="csv">CSV</option>
-            <option value="json">JSON</option>
-          </select>
-        </label>
-        <label title="Merge senders that share a label into one rule — fewer filters, stays under Gmail's ~500 cap">
-          <input type="checkbox" id="dl-consolidate"> Combine senders per label
-        </label>
-      </div>
-
-      <button class="download-btn" id="download-btn" disabled>Download filters</button>
-
-      <div class="instructions">
-        <h3>How to import into Gmail</h3>
-        <ol>
-          <li>Click <strong>Download Gmail filters XML</strong> above — save the file anywhere.</li>
-          <li>In Gmail, click the gear icon ⚙ → <strong>See all settings</strong></li>
-          <li>Click the <strong>Filters and Blocked Addresses</strong> tab</li>
-          <li>Scroll to the bottom → click <strong>Import filters</strong></li>
-          <li>Choose the downloaded file → <strong>Open file</strong> → <strong>Create filters</strong></li>
-        </ol>
-      </div>
-
-      <details class="xml-note" style="margin-top:18px;font-size:13px;color:#5f6368">
-        <summary style="cursor:pointer;color:#1a73e8">What's in the file? (it's XML)</summary>
-        <p style="margin:10px 0">Your filters are saved as <strong>XML</strong> — Gmail's import
-          format. You never need to open or edit it; just download above and import. For the
-          curious, one filter looks like this inside:</p>
-        <pre style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:8px;padding:12px;
-                    overflow:auto;font-size:12px;line-height:1.5"><code>&lt;entry&gt;
-  &lt;category term='filter'/&gt;
-  &lt;apps:property name='from'  value='chase.com'/&gt;
-  &lt;apps:property name='label' value='Banking'/&gt;
-&lt;/entry&gt;</code></pre>
-        <p style="margin:10px 0">Want to hand-tweak it? Open it in any text/XML editor — e.g.
-          <a href="https://code.visualstudio.com" target="_blank" rel="noopener">VS&nbsp;Code</a>
-          (Mac/Windows/Linux),
-          <a href="https://notepad-plus-plus.org" target="_blank" rel="noopener">Notepad++</a>
-          (Windows), or paste it into a free in-browser viewer like
-          <a href="https://codebeautify.org/xmlviewer" target="_blank" rel="noopener">CodeBeautify</a>
-          — no install.</p>
-      </details>
     </div>
 
-    <!-- Starter packs: senders everyone has -->
-    <div class="card">
-      <h2>Starter packs</h2>
-      <p class="subtitle">Senders everyone has — click to add. We label them, and keep the important
-        ones (banks, bills) in your inbox so nothing urgent gets hidden.</p>
-      <div id="starter-packs"><p class="subtitle" style="opacity:.6">Loading…</p></div>
-    </div>
-
-    <!-- Community inspiration -->
-    <div class="card community">
-      <h2>What people are filtering</h2>
-      <p class="subtitle">Click any pattern to add it to your filters.</p>
-      <div class="chips" id="chips">
-        {% if top_patterns %}
-          {% for p in top_patterns %}
-          <span class="chip"
-                data-pattern="{{ p.pattern }}"
-                data-label="{{ p.label }}"
-                data-field="{{ p.field }}">
-            <span class="chip-pattern">{{ p.pattern }}</span>
-            <span class="chip-arrow">→</span>
-            <span class="chip-label">{{ p.label }}</span>
-            {% if p.count > 1 %}
-            <span class="chip-count">{{ p.count }}</span>
-            {% endif %}
-          </span>
-          {% endfor %}
-        {% else %}
-          <p class="empty-feed">No patterns yet — be the first to add some!</p>
-        {% endif %}
-      </div>
-      <p class="added-notice" id="added-notice">✓ Added to your filters</p>
-    </div>
+    <!-- footer -->
+    <footer style="margin-top:30px;padding-top:18px;border-top:1px solid #e8e2d8">
+      <p style="font-size:11px;line-height:1.5;color:#a39d92;margin:0">Not affiliated with, sponsored by, or endorsed by Google. Gmail™ is a trademark of Google LLC. This is an independent tool that generates a filter file you import yourself.</p>
+    </footer>
 
   </div>
-</main>
+</div>
 
-<footer style="max-width:1080px;margin:32px auto 24px;padding:16px 20px;border-top:1px solid #e5e7eb;
-                color:#9aa0a6;font-size:12px;line-height:1.6;text-align:center">
-  Filters are generated in your browser and downloaded as a file — {{ brand }} never connects to
-  your Google account or sees your email. <a href="/roll-your-own" style="color:#1a73e8">How Gmail filters work ›</a><br>
-  {{ brand }} is an independent tool, not affiliated with, endorsed by, or sponsored by Google.
-  Gmail is a trademark of Google&nbsp;LLC.
-</footer>
+<!-- modals (fixed overlays) -->
+<div id="modalProvider" style="display:none;position:fixed;inset:0;background:rgba(31,36,32,.5);align-items:center;justify-content:center;padding:20px;z-index:50">
+  <div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55)">
+    <div class="bric" style="font-weight:700;font-size:18px;letter-spacing:-.01em;color:#b4472f">That's too broad</div>
+    <p style="font-size:13.5px;line-height:1.5;color:#54504a;margin:10px 0 0;text-wrap:pretty">This would delete mail from <strong>everyone</strong> using that provider — including real messages from friends, family and your bank. Remove it and list the <em>specific</em> senders you want gone instead (like <span class="mono">name@gmail.com</span>).</p>
+    <div id="providerList" style="margin:14px 0 18px;background:#fbeae5;border:1px solid #f3d4c9;border-radius:10px;padding:8px 12px"></div>
+    <button type="button" id="closeProvider" style="width:100%;font-size:14px;font-weight:700;padding:12px;border-radius:11px;border:none;background:var(--accent);color:#fff;cursor:pointer">Back to edit</button>
+  </div>
+</div>
+<div id="modalSingle" style="display:none;position:fixed;inset:0;background:rgba(31,36,32,.5);align-items:center;justify-content:center;padding:20px;z-index:50">
+  <div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55)">
+    <div class="bric" style="font-weight:700;font-size:18px;letter-spacing:-.01em">Is this your own address?</div>
+    <p style="font-size:13.5px;line-height:1.5;color:#54504a;margin:10px 0 0;text-wrap:pretty">It's in your <strong>delete</strong> list. If it's <strong>yours</strong>, we'll leave it out — otherwise this filter would send <em>your own</em> mail to Trash.</p>
+    <div id="ownAddr" class="mono" style="margin:14px 0 18px;background:#faf8f3;border:1px solid #efe9df;border-radius:10px;padding:11px 12px;font-size:13.5px;color:#2a2723;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    <div style="display:flex;gap:10px">
+      <button type="button" id="ownYes" style="flex:1;font-size:14px;font-weight:600;padding:12px;border-radius:11px;border:1px solid #e2dccf;background:#fff;color:#54504a;cursor:pointer">Yes, that's me</button>
+      <button type="button" id="ownNo" style="flex:1;font-size:14px;font-weight:700;padding:12px;border-radius:11px;border:none;background:var(--accent);color:#fff;cursor:pointer">No, delete it</button>
+    </div>
+  </div>
+</div>
+<div id="modalMulti" style="display:none;position:fixed;inset:0;background:rgba(31,36,32,.5);align-items:center;justify-content:center;padding:20px;z-index:50">
+  <div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55)">
+    <div class="bric" style="font-weight:700;font-size:18px;letter-spacing:-.01em">Check these first</div>
+    <p style="font-size:13.5px;line-height:1.5;color:#54504a;margin:10px 0 0;text-wrap:pretty">Your <strong>delete</strong> list has more than one <strong>@gmail.com</strong> address. We can't tell which (if any) is your own — go back and remove any that belongs to <em>you</em>, or deleting it would trash your own mail.</p>
+    <div id="gmailList" style="margin:14px 0 18px;background:#faf8f3;border:1px solid #efe9df;border-radius:10px;padding:8px 12px"></div>
+    <button type="button" id="closeMulti" style="width:100%;font-size:14px;font-weight:700;padding:12px;border-radius:11px;border:none;background:var(--accent);color:#fff;cursor:pointer">Back to edit</button>
+  </div>
+</div>
 
 <script>
-const MAX_ROWS = {{ max_rows }};
-let rows = [];
+const WORDMARK = {{ brand | tojson }};
+const PROVIDERS = ['gmail.com','googlemail.com','yahoo.com','ymail.com','outlook.com','hotmail.com','live.com','msn.com','icloud.com','me.com','mac.com','aol.com','proton.me','protonmail.com','gmx.com','mail.com','zoho.com'];
+const ACCENT = '#2f7d5b';
+let nextId = 2;
+const state = { deleteText:'', labelGroups:[{id:1,name:'',text:''}], downloaded:false,
+                notice:null, blockProvider:false, showConfirm:false, advSubmitted:false };
 
-function renderRows() {
-  const tbody = document.getElementById('filter-rows');
-  tbody.innerHTML = '';
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function kindOf(raw){
+  if(raw.includes('@')) return 'sender';
+  if(/^[^\s@]+\.(com|org|net|edu|gov|io|co|us|info|biz|me|app)$/i.test(raw)) return 'sender';
+  return 'subject';
+}
+function parseLines(text){ return (text||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).map(raw=>({raw,kind:kindOf(raw)})); }
+function queryFor(e){ return e.kind==='sender' ? 'from:('+e.raw+')' : 'subject:('+e.raw+')'; }
+function providerDomains(){ return parseLines(state.deleteText).filter(e=>e.kind==='sender').map(e=>e.raw.toLowerCase()).filter(r=>!r.includes('@')&&PROVIDERS.includes(r)); }
+function gmailAddrs(){ return parseLines(state.deleteText).filter(e=>e.kind==='sender'&&/@gmail\.com$/i.test(e.raw)).map(e=>e.raw); }
+function hasAnything(){ if(parseLines(state.deleteText).length) return true; return state.labelGroups.some(g=>g.name.trim()&&parseLines(g.text).length); }
+function slug(){ return (WORDMARK||'filtergmail').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
 
-  rows.forEach((row, i) => {
-    const tr = document.createElement('tr');
-    tr.className = 'filter-row';
-    const act = row.action || 'keep';
-    tr.innerHTML = `
-      <td><input type="text" placeholder="e.g. last call, noreply@shop.com" value="${esc(row.pattern)}" data-i="${i}" data-field="pattern"></td>
-      <td><input type="text" placeholder="e.g. Promotions" value="${esc(row.label)}" data-i="${i}" data-field="label"></td>
-      <td><select data-i="${i}" data-field="action" style="font:inherit;padding:6px 4px">
-        <option value="keep"${act==='keep'?' selected':''}>Label only</option>
-        <option value="archive"${act==='archive'?' selected':''}>Skip inbox</option>
-        <option value="trash"${act==='trash'?' selected':''}>Delete</option>
-      </select></td>
-      <td><button class="remove-btn" data-i="${i}" title="Remove">✕</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  document.getElementById('row-count').textContent = rows.length;
-  document.getElementById('add-btn').disabled = rows.length >= MAX_ROWS;
-  document.getElementById('download-btn').disabled = !rows.some(r => r.pattern.trim() && r.label.trim());
+function buildXml(){
+  const mk=(title,label,query,trash)=>{
+    const props=[['hasTheWord',query],['label',label]];
+    if(trash) props.push(['shouldTrash','true']);
+    props.push(['sizeOperator','s_sl'],['sizeUnit','s_smb']);
+    const ps=props.map(([n,v])=>"    <apps:property name='"+n+"' value='"+esc(v)+"'/>").join('\n');
+    return "  <entry>\n    <category term='filter'></category>\n    <title>"+esc(title)+"</title>\n    <content></content>\n"+ps+"\n  </entry>";
+  };
+  const entries=[];
+  parseLines(state.deleteText).forEach(e=>{ const label=e.kind==='sender'?'From Spam':'Subject Spam'; entries.push(mk(label+': '+e.raw,label,queryFor(e),true)); });
+  state.labelGroups.forEach(g=>{ const name=g.name.trim(); if(!name) return; parseLines(g.text).forEach(e=>{ entries.push(mk(name+': '+e.raw,name,queryFor(e),false)); }); });
+  return "<?xml version='1.0' encoding='UTF-8'?>\n<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>\n  <title>"+esc(WORDMARK||'filtergmail')+" filters</title>\n"+entries.join('\n')+"\n</feed>\n";
 }
 
-function esc(str) {
-  return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const NOTICE = {
+  'removed-saved':'We left your own address out — a filter on it would catch the mail you send and move it to Trash. Your file has everything else.',
+  'removed-empty':'That was your own address, so there’s nothing to delete yet — and a filter on it would Trash the mail you send. Add the senders or subjects you want gone.'
+};
+const TAG = "flex:none;font-size:11px;font-weight:700;color:#a8543c;background:#fbeae5;padding:3px 9px;border-radius:6px";
+
+function renderDelete(){
+  const entries = parseLines(state.deleteText);
+  $('deletePreviewWrap').style.display = entries.length ? 'block' : 'none';
+  $('deletePreview').innerHTML = entries.map(e=>
+    "<div style=\"display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #f3efe7\">"
+    +"<span class='mono' style=\"font-size:13px;color:#2a2723;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">"+esc(e.raw)+"</span>"
+    +"<span style=\""+TAG+"\">"+(e.kind==='sender'?'From Spam':'Subject Spam')+"</span></div>").join('');
+  const n = $('deleteNotice');
+  if(state.notice){ n.style.display='block'; n.textContent = NOTICE[state.notice]||''; } else n.style.display='none';
 }
 
-document.getElementById('filter-rows').addEventListener('input', e => {
-  const i = +e.target.dataset.i;
-  const field = e.target.dataset.field;
-  if (field && i >= 0) {
-    rows[i][field] = e.target.value;
-    document.getElementById('download-btn').disabled = !rows.some(r => r.pattern.trim() && r.label.trim());
-  }
-});
-
-document.getElementById('filter-rows').addEventListener('click', e => {
-  const btn = e.target.closest('.remove-btn');
-  if (btn) {
-    rows.splice(+btn.dataset.i, 1);
-    renderRows();
-  }
-});
-
-document.getElementById('add-btn').addEventListener('click', () => {
-  if (rows.length < MAX_ROWS) {
-    rows.push({ pattern: '', label: '', action: 'keep' });
-    renderRows();
-    const inputs = document.querySelectorAll('#filter-rows .filter-row:last-child input');
-    if (inputs[0]) inputs[0].focus();
-  }
-});
-
-document.getElementById('download-btn').addEventListener('click', async () => {
-  const valid = rows.filter(r => r.pattern.trim() && r.label.trim())
-                    .map(r => ({ pattern: r.pattern.trim(), label: r.label.trim(),
-                                 action: r.action || 'keep', field: r.field }));
-  if (!valid.length) return;
-
-  const fmt = document.getElementById('dl-format').value || 'xml';
-  const consolidate = document.getElementById('dl-consolidate').checked;
-  const btn = document.getElementById('download-btn');
-  btn.disabled = true;
-  btn.textContent = 'Generating…';
-
-  try {
-    const resp = await fetch('/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filters: valid, format: fmt, consolidate }),
-    });
-
-    if (!resp.ok) throw new Error('Server error');
-
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'gmail_filters.' + fmt;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    alert('Something went wrong. Please try again.');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Download filters';
-  }
-});
-
-// Community chips
-document.getElementById('chips').addEventListener('click', e => {
-  const chip = e.target.closest('.chip');
-  if (!chip) return;
-
-  if (rows.length >= MAX_ROWS) {
-    alert('You\'ve reached the limit of ' + MAX_ROWS + ' filters. Remove one to add more.');
-    return;
-  }
-
-  const pattern = chip.dataset.pattern;
-  const label = chip.dataset.label;
-  const field = chip.dataset.field;
-
-  // Don't add duplicates (match the DB's UNIQUE(pattern, label, field))
-  if (rows.some(r => r.pattern.toLowerCase() === pattern.toLowerCase()
-                  && (r.label || '').toLowerCase() === (label || '').toLowerCase()
-                  && (r.field || '') === (field || ''))) return;
-
-  rows.push({ pattern, label, field, action: 'keep' });
-  renderRows();
-
-  const notice = document.getElementById('added-notice');
-  notice.style.display = 'block';
-  clearTimeout(notice._t);
-  notice._t = setTimeout(() => notice.style.display = 'none', 2000);
-});
-
-// Quick on-ramp: paste an email → /parse → suggested filter dropped into the list
-document.getElementById('paste-btn').addEventListener('click', async () => {
-  const ta = document.getElementById('paste-input');
-  const msg = document.getElementById('paste-msg');
-  const text = ta.value.trim();
-  if (!text) { msg.textContent = 'Paste an email first.'; return; }
-  msg.textContent = 'Analyzing…';
-  try {
-    const resp = await fetch('/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                         body: JSON.stringify({ text }) });
-    const data = await resp.json();
-    if (!resp.ok || !data.filter) {
-      msg.textContent = (data && (data.error || data.reason)) || "Couldn't suggest a filter — try the from/subject lines.";
-      return;
+function groupNoteText(g){
+  const entries = parseLines(g.text), name = g.name.trim();
+  return (name && entries.length) ? entries.length+' '+(entries.length===1?'rule':'rules')+' → labeled “'+name+'”, kept in your inbox'
+                                  : 'One sender or subject per line — these stay in your inbox.';
+}
+function renderGroups(){
+  const host = $('labelGroups'); host.innerHTML='';
+  state.labelGroups.forEach(g=>{
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid #efe9df;border-radius:12px;padding:13px;background:#fcfbf8';
+    const row = document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px';
+    const name = document.createElement('input');
+    name.value=g.name; name.placeholder='Label name, e.g. Banks'; name.className='';
+    name.style.cssText="flex:1;min-width:0;font-weight:600;font-size:13.5px;padding:9px 11px;border:1px solid #e2dccf;border-radius:9px;background:#fff;color:#2a2723;outline:none";
+    name.addEventListener('input',e=>{ g.name=e.target.value; state.downloaded=false; note.textContent=groupNoteText(g); renderDownload(); });
+    row.appendChild(name);
+    if(state.labelGroups.length>1){
+      const rm=document.createElement('button'); rm.type='button'; rm.setAttribute('aria-label','remove label'); rm.textContent='×';
+      rm.style.cssText="flex:none;width:32px;height:32px;border-radius:8px;border:1px solid #ece6dc;background:#fff;color:#b4472f;font-size:17px;line-height:1;cursor:pointer";
+      rm.addEventListener('click',()=>{ state.labelGroups=state.labelGroups.filter(x=>x.id!==g.id); renderGroups(); renderDownload(); });
+      row.appendChild(rm);
     }
-    const f = data.filter;
-    const field = f.from ? 'from' : (f.subject ? 'subject' : 'hasTheWord');
-    const action = f.shouldTrash === 'true' ? 'trash' : (f.shouldArchive === 'true' ? 'archive' : 'keep');
-    rows.push({ pattern: f[field] || '', label: f.label || 'Junk mail', field, action });
-    renderRows();
-    ta.value = '';
-    msg.textContent = '✓ Added — ' + (data.reason || '').slice(0, 130);
-  } catch (e) { msg.textContent = 'Something went wrong.'; }
-});
-
-// Starter packs: senders everyone has → click a chip to add it
-fetch('/api/starter').then(r => r.json()).then(cat => {
-  const host = document.getElementById('starter-packs');
-  if (!host) return;
-  host.innerHTML = '';
-  Object.keys(cat).forEach(name => {
-    const block = cat[name];
-    const h = document.createElement('div');
-    h.style.cssText = 'margin:12px 0 4px;font-weight:600;font-size:13px';
-    h.textContent = name;
-    const chips = document.createElement('div');
-    chips.className = 'chips';
-    block.senders.forEach(s => {
-      const c = document.createElement('span');
-      c.className = 'chip';
-      c.style.cursor = 'pointer';
-      c.innerHTML = '<span class="chip-pattern">' + esc(s.name) + '</span>';
-      c.addEventListener('click', () => {
-        if (rows.some(r => (r.pattern || '').toLowerCase() === s.domain && (r.label || '') === name)) return;
-        rows.push({ pattern: s.domain, label: name, field: 'from', action: block.action });
-        renderRows();
-      });
-      chips.appendChild(c);
-    });
-    host.appendChild(h);
-    host.appendChild(chips);
+    wrap.appendChild(row);
+    const ta=document.createElement('textarea'); ta.rows=2; ta.value=g.text; ta.className='mono';
+    ta.placeholder='chase.com\nstatement is ready';
+    ta.style.cssText="width:100%;font-size:13px;line-height:1.7;padding:10px 12px;border:1px solid #e2dccf;border-radius:9px;background:#fff;color:#2a2723;outline:none;resize:vertical";
+    ta.addEventListener('input',e=>{ g.text=e.target.value; state.downloaded=false; note.textContent=groupNoteText(g); renderDownload(); });
+    wrap.appendChild(ta);
+    const note=document.createElement('div'); note.style.cssText='font-size:11.5px;color:#9a948a;margin-top:7px'; note.textContent=groupNoteText(g);
+    wrap.appendChild(note);
+    host.appendChild(wrap);
   });
-}).catch(() => {
-  const h = document.getElementById('starter-packs');
-  if (h) h.innerHTML = '<p class="subtitle" style="opacity:.6">Starter packs unavailable right now.</p>';
+}
+
+function renderDownload(){
+  const ready = hasAnything();
+  $('downloadIcon').textContent = state.downloaded ? '✓' : '↓';
+  $('downloadLabel').textContent = state.downloaded ? 'Downloaded — now import it below' : 'Download filter file';
+  $('downloadBtn').style.cssText = "width:100%;display:flex;align-items:center;justify-content:center;gap:9px;margin-top:18px;font-size:15.5px;font-weight:700;padding:15px;border-radius:12px;border:none;transition:.18s ease;color:#fff;cursor:"+(ready?'pointer':'not-allowed')+";opacity:"+(ready?1:.5)+";background:"+(state.downloaded?'#1f2420':'var(--accent)');
+  $('fileName').textContent = slug()+'-filters.xml';
+}
+
+function renderModals(){
+  const pd = providerDomains(), ga = gmailAddrs();
+  $('modalProvider').style.display = (state.blockProvider && pd.length) ? 'flex' : 'none';
+  $('providerList').innerHTML = pd.map(d=>"<div class='mono' style=\"font-size:13px;color:#a8543c;padding:4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">"+esc(d)+"</div>").join('');
+  $('modalSingle').style.display = (state.showConfirm && ga.length===1) ? 'flex' : 'none';
+  $('ownAddr').textContent = ga[0]||'';
+  $('modalMulti').style.display = (state.showConfirm && ga.length>1) ? 'flex' : 'none';
+  $('gmailList').innerHTML = ga.map(g=>"<div class='mono' style=\"font-size:13px;color:#2a2723;padding:4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">"+esc(g)+"</div>").join('');
+}
+
+function render(){ renderDelete(); renderDownload(); renderModals(); }
+
+function doDownload(){
+  if(!hasAnything()){ state.showConfirm=false; renderModals(); return; }
+  const blob = new Blob([buildXml()],{type:'application/xml'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=slug()+'-filters.xml';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  state.downloaded=true; renderDownload();
+}
+
+$('deleteText').addEventListener('input',e=>{ state.deleteText=e.target.value; state.downloaded=false; state.notice=null; state.blockProvider=false; render(); });
+$('addGroup').addEventListener('click',()=>{ state.labelGroups.push({id:nextId++,name:'',text:''}); renderGroups(); renderDownload(); });
+
+$('downloadBtn').addEventListener('click',()=>{
+  if(!hasAnything()) return;
+  if(providerDomains().length){ state.blockProvider=true; renderModals(); return; }
+  if(gmailAddrs().length>=1){ state.showConfirm=true; renderModals(); return; }
+  doDownload();
+});
+$('closeProvider').addEventListener('click',()=>{ state.blockProvider=false; renderModals(); });
+$('closeMulti').addEventListener('click',()=>{ state.showConfirm=false; renderModals(); });
+$('ownNo').addEventListener('click',()=>{ state.showConfirm=false; renderModals(); doDownload(); });
+$('ownYes').addEventListener('click',()=>{
+  const addr = gmailAddrs()[0];
+  const remaining = parseLines(state.deleteText).filter(e=>e.raw!==addr);
+  const anyLabels = state.labelGroups.some(g=>g.name.trim()&&parseLines(g.text).length);
+  state.showConfirm=false; state.downloaded=false;
+  if(remaining.length===0 && !anyLabels){ state.deleteText=''; $('deleteText').value=''; state.notice='removed-empty'; render(); return; }
+  state.deleteText = remaining.map(e=>e.raw).join('\n'); $('deleteText').value=state.deleteText;
+  state.notice='removed-saved'; render(); doDownload();
 });
 
-// Start with one empty row
-rows.push({ pattern: '', label: '', action: 'keep' });
-renderRows();
+// Advanced email gauge → POST /interest (the only server call on this page)
+function advValid(){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(($('advEmail').value||'').trim()); }
+function renderAdv(){ const b=$('advSubmit'); const v=advValid();
+  b.style.cssText="flex:none;font-size:13.5px;font-weight:700;padding:11px 15px;border-radius:10px;border:none;color:#fff;background:var(--accent);cursor:"+(v?'pointer':'not-allowed')+";opacity:"+(v?1:.55); }
+$('advEmail').addEventListener('input',renderAdv);
+$('advSubmit').addEventListener('click',()=>{
+  if(!advValid()) return;
+  const email = $('advEmail').value.trim();
+  fetch('/interest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,kind:'advanced'})}).catch(()=>{});
+  $('advForm').style.display='none'; $('advThanks').style.display='flex';
+});
+
+renderGroups(); renderAdv(); render();
 </script>
 </body>
 </html>

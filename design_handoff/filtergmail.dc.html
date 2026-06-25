@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f3efe8}
+</style>
+</helmet>
+<div ref="{{ rootRef }}" style="--accent:#2f7d5b;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#2a2723;min-height:100vh;background:#faf8f4;-webkit-font-smoothing:antialiased">
+  <div style="max-width:520px;margin:0 auto;padding:0 18px 56px">
+
+    <!-- header -->
+    <header style="display:flex;align-items:center;gap:9px;padding:18px 0">
+      <span style="display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;font-size:15px;font-family:'Bricolage Grotesque',sans-serif">↯</span>
+      <span style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px;letter-spacing:-.01em">{{ wordmark }}</span>
+    </header>
+
+    <!-- intro -->
+    <h1 style="font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:27px;line-height:1.1;letter-spacing:-.02em;margin:14px 0 0;text-wrap:balance">Tidy up your Gmail.</h1>
+    <p style="font-size:15px;line-height:1.5;color:#54504a;margin:9px 0 0;text-wrap:pretty">Delete the junk, label the keepers, download a filter file, and import it into Gmail once. We never sign in or see your mail.</p>
+
+    <!-- DELETE card -->
+    <div style="margin-top:22px;background:#fff;border:1px solid #ece6dc;border-radius:16px;padding:18px">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:16px">Delete the junk</div>
+      <div style="font-size:13px;color:#6b665e;margin:3px 0 12px;line-height:1.4">Paste a sender to block them, or words to block by subject. Caught mail gets labeled and sent to Trash.</div>
+      <textarea value="{{ deleteText }}" onChange="{{ onDeleteChange }}" rows="4" placeholder="deals@noreply.example.com&#10;You have won&#10;final notice" style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:13.5px;line-height:1.7;padding:12px 13px;border:1px solid #e2dccf;border-radius:10px;background:#faf8f3;color:#2a2723;outline:none;resize:vertical"></textarea>
+      <div style="font-size:12px;color:#9a948a;margin-top:9px;display:flex;gap:16px;flex-wrap:wrap">
+        <span><strong style="color:#6b665e">an @address or domain (chase.com)</strong> → “From Spam”</span>
+        <span><strong style="color:#6b665e">other words</strong> → “Subject Spam”</span>
+      </div>
+
+      <sc-if value="{{ showNotice }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:12px;background:#fbf6ea;border:1px solid #f0e4c8;border-radius:10px;padding:11px 13px;font-size:13px;line-height:1.45;color:#6f6450">{{ noticeText }}</div>
+      </sc-if>
+
+      <sc-if value="{{ hasDelete }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:14px;border-top:1px solid #efe9df;padding-top:6px">
+          <sc-for list="{{ deleteParsed }}" as="p" hint-placeholder-count="2">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #f3efe7">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2723;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.raw }}</span>
+              <span style="{{ p.tagStyle }}">{{ p.kindLabel }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- LABEL card -->
+    <div style="margin-top:16px;background:#fff;border:1px solid #ece6dc;border-radius:16px;padding:18px">
+      <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:16px">Label &amp; keep</div>
+      <div style="font-size:13px;color:#6b665e;margin:3px 0 14px;line-height:1.4">Mail you want to keep but organize — like everything from your bank. It stays in your inbox and just gets your label.</div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <sc-for list="{{ groupsView }}" as="g" hint-placeholder-count="1">
+          <div style="border:1px solid #efe9df;border-radius:12px;padding:13px;background:#fcfbf8">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <input value="{{ g.name }}" onChange="{{ g.onName }}" placeholder="Label name, e.g. Banks" style="flex:1;min-width:0;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:13.5px;padding:9px 11px;border:1px solid #e2dccf;border-radius:9px;background:#fff;color:#2a2723;outline:none">
+              <sc-if value="{{ g.canRemove }}" hint-placeholder-val="{{ false }}">
+                <button type="button" onClick="{{ g.onRemove }}" aria-label="remove label" style="flex:none;width:32px;height:32px;border-radius:8px;border:1px solid #ece6dc;background:#fff;color:#b4472f;font-size:17px;line-height:1;cursor:pointer">×</button>
+              </sc-if>
+            </div>
+            <textarea value="{{ g.text }}" onChange="{{ g.onText }}" rows="2" placeholder="chase.com&#10;statement is ready" style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;padding:10px 12px;border:1px solid #e2dccf;border-radius:9px;background:#fff;color:#2a2723;outline:none;resize:vertical"></textarea>
+            <div style="font-size:11.5px;color:#9a948a;margin-top:7px">{{ g.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <button type="button" onClick="{{ onAddGroup }}" style="margin-top:12px;width:100%;font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;padding:10px;border-radius:10px;border:1.5px dashed #d8d2c6;background:#fff;color:#6b665e;cursor:pointer">+ Add another label</button>
+      <div style="font-size:11.5px;color:#9a948a;margin-top:12px;line-height:1.45">No need to create these labels in Gmail first — it makes each one automatically when you import the file.</div>
+    </div>
+
+    <!-- download -->
+    <button type="button" onClick="{{ onDownload }}" style="{{ downloadBtnStyle }}">
+      <span style="font-size:18px">{{ downloadIcon }}</span>
+      <span>{{ downloadLabel }}</span>
+    </button>
+    <div style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9a948a;margin-top:9px">{{ fileName }}</div>
+
+    <!-- what it does -->
+    <div style="margin-top:22px;background:color-mix(in srgb, var(--accent) 7%, #fff);border:1px solid color-mix(in srgb, var(--accent) 22%, #fff);border-radius:14px;padding:16px">
+      <div style="font-weight:600;font-size:14px;margin-bottom:11px">What the file does</div>
+      <sc-for list="{{ facts }}" as="f" hint-placeholder-count="3">
+        <div style="display:flex;gap:10px;padding-bottom:10px">
+          <span style="flex:none;color:var(--accent);font-weight:800;font-size:13px;line-height:1.5">✓</span>
+          <div style="font-size:13.5px;line-height:1.5;color:#3f3b35">{{ f }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- import steps -->
+    <div style="margin-top:24px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9a948a;margin-bottom:12px">Import it, once</div>
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4">
+        <div style="display:flex;gap:12px;padding-bottom:14px">
+          <span style="flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;border:1.5px solid color-mix(in srgb, var(--accent) 45%, #fff);color:var(--accent);font-weight:800;font-size:12.5px;font-family:'Bricolage Grotesque',sans-serif">{{ s.n }}</span>
+          <div style="font-size:14px;line-height:1.45;color:#3f3b35;padding-top:1px">{{ s.body }}</div>
+        </div>
+      </sc-for>
+      <div style="font-size:12.5px;line-height:1.45;color:#8a847a;background:#f4f1ea;border-radius:10px;padding:11px 13px">Use the Gmail <strong style="color:#6b665e">website</strong>, not the app. On a phone you can open Gmail in Safari and tap “Desktop site,” but it's easier on a computer.</div>
+    </div>
+
+    <!-- advanced interest -->
+    <div style="margin-top:24px;background:#1f2420;border-radius:16px;padding:20px;color:#e9e6df">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8fae9f;margin-bottom:10px">Advanced</div>
+      <p style="font-size:13.5px;line-height:1.55;color:#cfcbc2;margin:0;text-wrap:pretty">We've also built an advanced version — upload and download your filters as CSV, JSON or YAML, combine several fields into one filter, and more. If that sounds useful, leave your email and we'll release it if enough people want it.</p>
+      <sc-if value="{{ advNotSubmitted }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <input type="email" value="{{ advEmail }}" onChange="{{ onAdvEmail }}" placeholder="you@example.com" style="flex:1;min-width:0;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:11px 12px;border:1px solid rgba(255,255,255,.16);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;outline:none">
+          <button type="button" onClick="{{ onAdvSubmit }}" style="{{ advBtnStyle }}">Notify me</button>
+        </div>
+        <div style="font-size:11px;color:#7d8a82;margin-top:9px">We'll only email you about the advanced version — nothing else.</div>
+      </sc-if>
+      <sc-if value="{{ advSubmitted }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:14px;display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px 14px">
+          <span style="color:#8fae9f;font-weight:800">✓</span>
+          <div style="font-size:13.5px;color:#e9e6df">Thanks — you're on the list. We'll be in touch if it ships.</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- block: whole provider domain in delete list -->
+    <sc-if value="{{ isProviderBlock }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;background:rgba(31,36,32,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50">
+        <div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55)">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18px;letter-spacing:-.01em;color:#b4472f">That's too broad</div>
+          <p style="font-size:13.5px;line-height:1.5;color:#54504a;margin:10px 0 0;text-wrap:pretty">This would delete mail from <strong>everyone</strong> using that provider — including real messages from friends, family and your bank. Remove it and list the <em>specific</em> senders you want gone instead (like <span style="font-family:'IBM Plex Mono',monospace">name@gmail.com</span>).</p>
+          <div style="margin:14px 0 18px;background:#fbeae5;border:1px solid #f3d4c9;border-radius:10px;padding:8px 12px">
+            <sc-for list="{{ providerDomains }}" as="d" hint-placeholder-count="1">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#a8543c;padding:4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d }}</div>
+            </sc-for>
+          </div>
+          <button type="button" onClick="{{ onCloseProvider }}" style="width:100%;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;padding:12px;border-radius:11px;border:none;background:var(--accent);color:#fff;cursor:pointer">Back to edit</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- confirm: single gmail address -->
+    <sc-if value="{{ isSingleConfirm }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;background:rgba(31,36,32,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50">
+        <div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55)">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18px;letter-spacing:-.01em">Is this your own address?</div>
+          <p style="font-size:13.5px;line-height:1.5;color:#54504a;margin:10px 0 0;text-wrap:pretty">It's in your <strong>delete</strong> list. If it's <strong>yours</strong>, we'll leave it out — otherwise this filter would send <em>your own</em> mail to Trash.</p>
+          <div style="margin:14px 0 18px;background:#faf8f3;border:1px solid #efe9df;border-radius:10px;padding:11px 12px;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#2a2723;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ownAddr }}</div>
+          <div style="display:flex;gap:10px">
+            <button type="button" onClick="{{ onOwnYes }}" style="flex:1;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:600;padding:12px;border-radius:11px;border:1px solid #e2dccf;background:#fff;color:#54504a;cursor:pointer">Yes, that's me</button>
+            <button type="button" onClick="{{ onOwnNo }}" style="flex:1;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;padding:12px;border-radius:11px;border:none;background:var(--accent);color:#fff;cursor:pointer">No, delete it</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- confirm: multiple gmail addresses -->
+    <sc-if value="{{ isMultiConfirm }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;background:rgba(31,36,32,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50">
+        <div style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:22px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55)">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18px;letter-spacing:-.01em">Check these first</div>
+          <p style="font-size:13.5px;line-height:1.5;color:#54504a;margin:10px 0 0;text-wrap:pretty">Your <strong>delete</strong> list has more than one <strong>@gmail.com</strong> address. We can't tell which (if any) is your own — go back and remove any that belongs to <em>you</em>, or deleting it would trash your own mail.</p>
+          <div style="margin:14px 0 18px;background:#faf8f3;border:1px solid #efe9df;border-radius:10px;padding:8px 12px">
+            <sc-for list="{{ gmailAddrs }}" as="g" hint-placeholder-count="2">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2723;padding:4px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ g }}</div>
+            </sc-for>
+          </div>
+          <button type="button" onClick="{{ onCloseConfirm }}" style="width:100%;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:700;padding:12px;border-radius:11px;border:none;background:var(--accent);color:#fff;cursor:pointer">Back to edit</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- footer -->
+    <footer style="margin-top:30px;padding-top:18px;border-top:1px solid #e8e2d8">
+      <p style="font-size:11px;line-height:1.5;color:#a39d92;margin:0">Not affiliated with, sponsored by, or endorsed by Google. Gmail™ is a trademark of Google LLC. This is an independent tool that generates a filter file you import yourself.</p>
+    </footer>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:440,&quot;height&quot;:900},&quot;wordmark&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;filtergmail&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2f7d5b&quot;,&quot;options&quot;:[&quot;#2f7d5b&quot;,&quot;#2f6f7d&quot;,&quot;#3a6ea5&quot;,&quot;#5a5fb0&quot;]}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.rootRef = React.createRef();
+    this.state = {
+      deleteText:"",
+      labelGroups:[{ id:1, name:"", text:"" }],
+      downloaded:false, showConfirm:false, blockProvider:false, notice:null,
+      advEmail:"", advSubmitted:false
+    };
+  }
+
+  onAdvEmail = (e) => this.setState({ advEmail:e.target.value });
+  advValid(){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((this.state.advEmail||'').trim()); }
+  onAdvSubmit = () => { if(this.advValid()) this.setState({ advSubmitted:true }); };
+
+  PROVIDERS = ['gmail.com','googlemail.com','yahoo.com','ymail.com','outlook.com','hotmail.com','live.com','msn.com','icloud.com','me.com','mac.com','aol.com','proton.me','protonmail.com','gmx.com','mail.com','zoho.com'];
+
+  // bare provider domains in the DELETE box — would trash everyone on that provider
+  providerDomains(){
+    return this.parseLines(this.state.deleteText)
+      .filter(e => e.kind === 'sender')
+      .map(e => e.raw.toLowerCase())
+      .filter(raw => !raw.includes('@') && this.PROVIDERS.includes(raw));
+  }
+
+  componentDidMount(){ this.applyAccent(); }
+  componentDidUpdate(){ this.applyAccent(); }
+  applyAccent(){
+    const el = this.rootRef.current;
+    if(el) el.style.setProperty('--accent', this.props.accentColor || '#2f7d5b');
+  }
+
+  esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+  kindOf(raw){
+    if(raw.includes('@')) return 'sender';
+    // a bare domain like chase.com / mail.irs.gov → treat as a sender
+    if(/^[^\s@]+\.(com|org|net|edu|gov|io|co|us|info|biz|me|app)$/i.test(raw)) return 'sender';
+    return 'subject';
+  }
+  parseLines(text){
+    return (text||'')
+      .split(/[\n,]+/).map(x => x.trim()).filter(Boolean)
+      .map(raw => ({ raw, kind: this.kindOf(raw) }));
+  }
+  queryFor(e){ return e.kind === 'sender' ? `from:(${e.raw})` : `subject:(${e.raw})`; }
+
+  onDeleteChange = (e) => this.setState({ deleteText:e.target.value, downloaded:false, notice:null, blockProvider:false });
+  updateGroup = (id, key, val) => this.setState(s => ({ labelGroups: s.labelGroups.map(g => g.id === id ? { ...g, [key]:val } : g), downloaded:false }));
+  addGroup = () => this.setState(s => ({ labelGroups:[...s.labelGroups, { id:Date.now()+Math.random(), name:"", text:"" }] }));
+  removeGroup = (id) => this.setState(s => ({ labelGroups: s.labelGroups.length > 1 ? s.labelGroups.filter(g => g.id !== id) : s.labelGroups }));
+
+  hasAnything(){
+    if(this.parseLines(this.state.deleteText).length) return true;
+    return this.state.labelGroups.some(g => g.name.trim() && this.parseLines(g.text).length);
+  }
+
+  gmailAddrs(){
+    return this.parseLines(this.state.deleteText)
+      .filter(e => e.kind === 'sender' && /@gmail\.com$/i.test(e.raw))
+      .map(e => e.raw);
+  }
+
+  buildXml(){
+    const mk = (title, label, query, trash) => {
+      const props = [['hasTheWord', query], ['label', label]];
+      if(trash) props.push(['shouldTrash', 'true']);
+      props.push(['sizeOperator','s_sl'], ['sizeUnit','s_smb']);
+      const ps = props.map(([n,v]) => `    <apps:property name='${n}' value='${this.esc(v)}'/>`).join('\n');
+      return `  <entry>\n    <category term='filter'></category>\n    <title>${this.esc(title)}</title>\n    <content></content>\n${ps}\n  </entry>`;
+    };
+    const entries = [];
+    // delete list → label as spam + trash
+    this.parseLines(this.state.deleteText).forEach(e => {
+      const label = e.kind === 'sender' ? 'From Spam' : 'Subject Spam';
+      entries.push(mk(`${label}: ${e.raw}`, label, this.queryFor(e), true));
+    });
+    // label groups → label only, stay in inbox
+    this.state.labelGroups.forEach(g => {
+      const name = g.name.trim();
+      if(!name) return;
+      this.parseLines(g.text).forEach(e => {
+        entries.push(mk(`${name}: ${e.raw}`, name, this.queryFor(e), false));
+      });
+    });
+    return `<?xml version='1.0' encoding='UTF-8'?>\n<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>\n  <title>${this.esc(this.props.wordmark||'filtergmail')} filters</title>\n${entries.join('\n')}\n</feed>\n`;
+  }
+
+  onDownload = () => {
+    if(!this.hasAnything()) return;
+    if(this.providerDomains().length){ this.setState({ blockProvider:true }); return; }
+    if(this.gmailAddrs().length >= 1){ this.setState({ showConfirm:true }); return; }
+    this.doDownload();
+  };
+
+  onCloseProvider = () => this.setState({ blockProvider:false });
+
+  // delete-list gmail address, NOT theirs: keep it, save.
+  onOwnNo = () => { this.setState({ showConfirm:false }); this.doDownload(); };
+
+  // delete-list gmail address, IS theirs: drop that line.
+  onOwnYes = () => {
+    const addr = this.gmailAddrs()[0];
+    const remaining = this.parseLines(this.state.deleteText).filter(e => e.raw !== addr);
+    const newDeleteText = remaining.map(e => e.raw).join('\n');
+    const anyLabels = this.state.labelGroups.some(g => g.name.trim() && this.parseLines(g.text).length);
+    if(remaining.length === 0 && !anyLabels){
+      this.setState({ deleteText:'', showConfirm:false, downloaded:false, notice:'removed-empty' });
+      return;
+    }
+    this.setState({ deleteText:newDeleteText, showConfirm:false, downloaded:false, notice:'removed-saved' }, () => this.doDownload());
+  };
+
+  onCloseConfirm = () => this.setState({ showConfirm:false });
+
+  doDownload = () => {
+    if(!this.hasAnything()){ this.setState({ showConfirm:false }); return; }
+    const blob = new Blob([this.buildXml()], { type:'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (this.props.wordmark||'filtergmail').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '-filters.xml';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    this.setState({ downloaded:true });
+  };
+
+  renderVals(){
+    const s = this.state;
+    const deleteEntries = this.parseLines(s.deleteText);
+    const deleteParsed = deleteEntries.map(e => ({
+      raw: e.raw,
+      kindLabel: e.kind === 'sender' ? 'From Spam' : 'Subject Spam',
+      tagStyle: "flex:none;font-size:11px;font-weight:700;color:#a8543c;background:#fbeae5;padding:3px 9px;border-radius:6px"
+    }));
+    const hasDelete = deleteEntries.length > 0;
+
+    const groupsView = s.labelGroups.map(g => {
+      const entries = this.parseLines(g.text);
+      const name = g.name.trim();
+      const note = (name && entries.length)
+        ? `${entries.length} ${entries.length === 1 ? 'rule' : 'rules'} → labeled “${name}”, kept in your inbox`
+        : 'One sender or subject per line — these stay in your inbox.';
+      return {
+        id:g.id, name:g.name, text:g.text, note,
+        canRemove: s.labelGroups.length > 1,
+        onName: e => this.updateGroup(g.id, 'name', e.target.value),
+        onText: e => this.updateGroup(g.id, 'text', e.target.value),
+        onRemove: () => this.removeGroup(g.id)
+      };
+    });
+
+    const noticeMap = {
+      'removed-saved': 'We left your own address out — a filter on it would catch the mail you send and move it to Trash. Your file has everything else.',
+      'removed-empty': 'That was your own address, so there’s nothing to delete yet — and a filter on it would Trash the mail you send. Add the senders or subjects you want gone.'
+    };
+    const noticeText = noticeMap[s.notice] || '';
+
+    const facts = [
+      'Junk you list gets a “From Spam” or “Subject Spam” label and goes to Trash (kept 30 days, just in case).',
+      'Mail you label — like everything from your bank — keeps its spot in your inbox and just gets your label too.',
+      'It all applies to new mail from now on; your existing inbox is never touched.'
+    ];
+
+    const steps = [
+      { n:'1', body:'In the Gmail website, click the gear (⚙) → “See all settings”.' },
+      { n:'2', body:'Open the “Filters and Blocked Addresses” tab.' },
+      { n:'3', body:'Scroll down, choose “Import filters,” and pick the file you downloaded.' },
+      { n:'4', body:'Click “Create filters.” Done — new mail is handled automatically.' }
+    ];
+
+    const ready = this.hasAnything();
+    return {
+      rootRef: this.rootRef,
+      wordmark: this.props.wordmark || 'filtergmail',
+      deleteText: s.deleteText, onDeleteChange: this.onDeleteChange,
+      deleteParsed, hasDelete,
+      groupsView, onAddGroup: this.addGroup,
+      facts, steps,
+      noticeText, showNotice: !!noticeText,
+      gmailAddrs: this.gmailAddrs(),
+      ownAddr: this.gmailAddrs()[0] || '',
+      providerDomains: this.providerDomains(),
+      isProviderBlock: s.blockProvider && this.providerDomains().length > 0,
+      onCloseProvider: this.onCloseProvider,
+      advEmail: s.advEmail, onAdvEmail: this.onAdvEmail, onAdvSubmit: this.onAdvSubmit,
+      advSubmitted: s.advSubmitted, advNotSubmitted: !s.advSubmitted,
+      advBtnStyle: `flex:none;font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;font-weight:700;padding:11px 15px;border-radius:10px;border:none;cursor:${this.advValid()?'pointer':'not-allowed'};opacity:${this.advValid()?1:.55};background:var(--accent);color:#fff`,
+      isSingleConfirm: s.showConfirm && this.gmailAddrs().length === 1,
+      isMultiConfirm: s.showConfirm && this.gmailAddrs().length > 1,
+      onOwnYes: this.onOwnYes,
+      onOwnNo: this.onOwnNo,
+      onCloseConfirm: this.onCloseConfirm,
+      onDownload: this.onDownload,
+      downloadLabel: s.downloaded ? 'Downloaded — now import it below' : 'Download filter file',
+      downloadIcon: s.downloaded ? '✓' : '↓',
+      fileName: (this.props.wordmark||'filtergmail').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '-filters.xml',
+      downloadBtnStyle: `width:100%;display:flex;align-items:center;justify-content:center;gap:9px;margin-top:18px;font-family:'IBM Plex Sans',sans-serif;font-size:15.5px;font-weight:700;padding:15px;border-radius:12px;cursor:${ready?'pointer':'not-allowed'};border:none;transition:.18s ease;color:#fff;opacity:${ready?1:.5};background:${s.downloaded?'#1f2420':'var(--accent)'}`
+    };
+  }
+}
+</script>
+</body>
+</html>
